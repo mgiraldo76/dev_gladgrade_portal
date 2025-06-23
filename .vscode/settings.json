@@ -1,0 +1,26 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "server": "34.86.121.148",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "GG DB",
+            "group": "GG_Instance",
+            "database": "gg",
+            "username": "postgres",
+            "password": "6L@d5QL"
+        },
+        {
+            "previewLimit": 50,
+            "server": "34.86.121.148",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "CORP DB",
+            "database": "corp",
+            "username": "postgres",
+            "password": "6L@d5QL",
+            "group": "GG_Instance"
+        }
+    ]
+}
