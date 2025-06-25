@@ -1,5 +1,10 @@
 {
   "/page": "app/page.js",
-  "/dashboard/profile/page": "app/dashboard/profile/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/api/clients/search-places/route": "app/api/clients/search-places/route.js",
+  "/api/sales/activities/route": "app/api/sales/activities/route.js",
+  "/api/business-sectors/route": "app/api/business-sectors/route.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/reviews/page": "app/dashboard/reviews/page.js",
+  "/dashboard/reports/page": "app/dashboard/reports/page.js",
+  "/dashboard/sales/page": "app/dashboard/sales/page.js"
 }

@@ -23,57 +23,65 @@ function generateTemporaryPassword(): string {
   return password
 }
 
-// GET /api/clients - Get all business clients from gg.businesses
+// GET /api/clients - Get all business clients from corp.business_clients
 export async function GET() {
   try {
-    console.log("🏢 Fetching business clients from gg.businesses...")
+    console.log("🏢 Fetching business clients from corp.business_clients...")
 
     const result = await query(`
       SELECT
-        b.id,
-        b.businessname,
-        b.placeid,
-        b.businesstype,
-        b.streetaddress,
-        b.city,
-        b.state,
-        b.zipcode,
-        b.country,
-        b.phone,
-        b.website,
-        b.logourl,
-        b.isactive,
-        b.isverified,
-        b.datecreated,
-        b.lastupdated,
-        u.firstname || ' ' || u.lastname as contact_name,
-        u.email as contact_email,
-        u.id as user_id,
-        u.firebaseuid,
+        bc.id,
+        bc.business_name as businessname,
+        bc.contact_name,
+        bc.contact_email,
+        bc.phone,
+        bc.website,
+        bc.business_address,
+        bc.claim_status,
+        bc.claim_method,
+        bc.security_level,
+        bc.verification_status,
+        bc.gcsg_score,
+        bc.monthly_reviews,
+        bc.total_reviews,
+        bc.average_rating,
+        bc.subscription_plan,
+        bc.subscription_status,
+        bc.onboarding_completed,
+        bc.lead_source,
+        bc.lead_status,
+        bc.created_at as datecreated,
+        bc.updated_at as lastupdated,
+        bc.last_login,
+        -- Industry category
+        ic.name as industry_category_name,
+        ic.icon as industry_icon,
+        -- Sales representative
         emp.full_name as sales_rep_name,
+        emp.email as sales_rep_email,
         emp.id as sales_rep_id,
-        bt.businesstype as business_type_name,
-        -- Calculate GCSG score from ratings
-        COALESCE(
-          CASE 
-            WHEN COUNT(cr.ratingvalue) > 0 
-            THEN 300 + (AVG(cr.ratingvalue::numeric) * 55)
-            ELSE 300 
-          END, 300
-        )::integer as gcsg_score,
-        COUNT(cr.id) as total_reviews,
-        COALESCE(AVG(cr.ratingvalue::numeric), 0)::numeric(3,2) as average_rating
-      FROM gg.businesses b
-      LEFT JOIN gg.users u ON b.userid = u.id
-      LEFT JOIN corp.employees emp ON u.email = emp.email -- Link via email for sales rep
-      LEFT JOIN gg.businesstypes bt ON b.businesstypeid = bt.id
-      LEFT JOIN gg.consumerratings cr ON b.placeid = cr.placeid
-      WHERE b.isactive = true
-      GROUP BY b.id, u.id, emp.id, bt.businesstype
-      ORDER BY b.datecreated DESC
+        dept.name as sales_rep_department,
+        -- Status indicators
+        CASE 
+          WHEN bc.firebase_uid IS NOT NULL THEN true
+          ELSE false
+        END as has_firebase_account,
+        CASE 
+          WHEN bc.verification_status = 'verified' THEN true
+          ELSE false
+        END as isverified,
+        CASE 
+          WHEN bc.security_level IN ('verified', 'pending') THEN true
+          ELSE false
+        END as isactive
+      FROM business_clients bc
+      LEFT JOIN industry_categories ic ON bc.industry_category_id = ic.id
+      LEFT JOIN employees emp ON bc.sales_rep_id = emp.id
+      LEFT JOIN departments dept ON emp.department_id = dept.id
+      ORDER BY bc.created_at DESC
     `)
 
-    console.log(`✅ Found ${result.rows.length} business clients`)
+    console.log(`✅ Found ${result.rows.length} business clients from corp database`)
 
     return NextResponse.json({
       success: true,
@@ -85,7 +93,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to fetch business clients from database",
+        error: "Failed to fetch business clients from corp database",
         details: errorMessage,
       },
       { status: 500 },
@@ -118,14 +126,12 @@ export async function POST(request: NextRequest) {
 
     await client.query("BEGIN")
 
-    // Get business details
-    const businessResult = await client.query("SELECT * FROM gg.businesses WHERE id = $1 AND isactive = true", [
-      business_id,
-    ])
+    // Get business details from corp.business_clients
+    const businessResult = await client.query("SELECT * FROM business_clients WHERE id = $1", [business_id])
 
     if (businessResult.rows.length === 0) {
       await client.query("ROLLBACK")
-      return NextResponse.json({ success: false, error: "Business not found" }, { status: 404 })
+      return NextResponse.json({ success: false, error: "Business client not found" }, { status: 404 })
     }
 
     const business = businessResult.rows[0]
@@ -154,7 +160,7 @@ export async function POST(request: NextRequest) {
           await setCustomClaims(firebaseUid, {
             role: "client",
             business_id: business_id,
-            business_name: business.businessname,
+            business_name: business.business_name,
             user_role: user_role,
             permissions: ["client_access", "view_reports", "manage_reviews", "manage_ads"],
           })
@@ -177,49 +183,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create user in gg.users table
-    const [firstName, ...lastNameParts] = user_name.trim().split(" ")
-    const lastName = lastNameParts.join(" ") || ""
-
-    const userResult = await client.query(
-      `INSERT INTO gg.users (
-        firebaseuid, email, firstname, lastname, displayname, primaryroleid, isactive
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7) 
-      RETURNING *`,
-      [
-        firebaseUid,
-        user_email.toLowerCase().trim(),
-        firstName,
-        lastName,
-        user_name.trim(),
-        3, // Client role ID from your schema
-        true,
-      ],
+    // Update business_clients record with Firebase UID
+    await client.query(
+      `UPDATE business_clients 
+       SET firebase_uid = $1, updated_at = NOW() 
+       WHERE id = $2`,
+      [firebaseUid, business_id],
     )
-
-    const newUser = userResult.rows[0]
-
-    // Link user to business (update business.userid)
-    await client.query("UPDATE gg.businesses SET userid = $1, lastupdated = NOW() WHERE id = $2", [
-      newUser.id,
-      business_id,
-    ])
 
     await client.query("COMMIT")
 
-    console.log("✅ Client user created successfully:", newUser)
+    console.log("✅ Client user created successfully for business:", business.business_name)
 
     return NextResponse.json({
       success: true,
       data: {
-        user: newUser,
         business: business,
         firebase_account_created: firebaseAccountCreated,
+        firebase_uid: firebaseUid,
         temporary_password: firebaseAccountCreated ? temporary_password || "Auto-generated" : null,
       },
       login_instructions: firebaseAccountCreated
         ? "The client can now log in at portal.gladgrade.com with their email and password"
-        : "Database record created. Firebase account can be created later.",
+        : "Database record updated. Firebase account can be created later.",
     })
   } catch (error: unknown) {
     await client.query("ROLLBACK")

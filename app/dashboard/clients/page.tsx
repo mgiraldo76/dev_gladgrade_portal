@@ -4,35 +4,18 @@ import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Plus, Search, Building, MapPin, Star, Calendar, User, Phone, Globe, Shield, TrendingUp } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
+import { ClientDetailsModal } from "@/components/client-details-modal"
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [clients, setClients] = useState<any[]>([])
-  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState<any>(null)
-
-  const [newClientUser, setNewClientUser] = useState({
-    business_id: 0,
-    user_email: "",
-    user_name: "",
-    user_role: "client_admin",
-    create_firebase_account: true,
-    temporary_password: "",
-  })
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false)
 
   // Load clients on component mount
   useEffect(() => {
@@ -56,73 +39,18 @@ export default function ClientsPage() {
     }
   }
 
-  const handleCreateClientUser = async () => {
-    if (!newClientUser.user_email || !newClientUser.user_name) {
-      alert("Email and name are required")
-      return
-    }
-
-    try {
-      console.log("👤 Creating client user for business:", selectedClient?.businessname)
-
-      const response = await fetch("/api/clients", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...newClientUser,
-          business_id: selectedClient?.id,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        setNewClientUser({
-          business_id: 0,
-          user_email: "",
-          user_name: "",
-          user_role: "client_admin",
-          create_firebase_account: true,
-          temporary_password: "",
-        })
-        setIsCreateUserOpen(false)
-        setSelectedClient(null)
-
-        // Show success message
-        if (result.firebase_account_created) {
-          alert(
-            `✅ Client user created successfully!\n\n🔥 Firebase account created\n🔑 Temporary password: ${result.temporary_password || "Auto-generated"}\n\n📧 The client can now log in with their email and password.`,
-          )
-        } else {
-          alert("✅ Client user created successfully in database only (no Firebase account)")
-        }
-
-        // Reload clients
-        loadClients()
-        console.log("✅ Client user created:", result.data)
-      } else {
-        alert(`Error: ${result.error}`)
-      }
-    } catch (error) {
-      console.error("❌ Error creating client user:", error)
-      alert("Failed to create client user. Please try again.")
-    }
-  }
-
   const handleManageClient = (client: any) => {
     setSelectedClient(client)
-    setNewClientUser({
-      ...newClientUser,
-      business_id: client.id,
-    })
-    setIsCreateUserOpen(true)
+    setIsClientModalOpen(true)
+  }
+
+  const handleClientUpdated = () => {
+    loadClients() // Reload the clients list
   }
 
   const filteredClients = clients.filter(
     (client) =>
-      client.businessname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.contact_email?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
@@ -145,7 +73,7 @@ export default function ClientsPage() {
           <h1 className="text-3xl font-bold text-dark">Business Clients</h1>
           <div className="flex items-center gap-2 mt-1">
             <Building className="h-4 w-4 text-blue-600" />
-            <span className="text-sm text-blue-600">GladGrade Mobile App Integration</span>
+            <span className="text-sm text-blue-600">GladGrade Portal Management</span>
           </div>
         </div>
         <div className="flex gap-2">
@@ -197,7 +125,7 @@ export default function ClientsPage() {
                     <Building className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold">{client.businessname}</h3>
+                    <h3 className="text-lg font-semibold">{client.business_name}</h3>
                     <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
                       {client.contact_name && (
                         <div className="flex items-center gap-1">
@@ -219,17 +147,19 @@ export default function ClientsPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                      {client.streetaddress && (
+                      {client.business_address && (
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3" />
                           <span>
-                            {client.streetaddress}, {client.city}, {client.state}
+                            {client.business_address}
+                            {client.city && `, ${client.city}`}
+                            {client.state && `, ${client.state}`}
                           </span>
                         </div>
                       )}
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        <span>Joined {new Date(client.datecreated).toLocaleDateString()}</span>
+                        <span>Created {new Date(client.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
                   </div>
@@ -238,7 +168,7 @@ export default function ClientsPage() {
                 <div className="flex items-center gap-6">
                   {/* GCSG Score */}
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-primary">{client.gcsg_score}</div>
+                    <div className="text-2xl font-bold text-primary">{client.gcsg_score || "N/A"}</div>
                     <div className="text-xs text-gray-500">GCSG Score</div>
                   </div>
 
@@ -246,34 +176,34 @@ export default function ClientsPage() {
                   <div className="text-center">
                     <div className="flex items-center gap-1">
                       <Star className="h-4 w-4 text-yellow-500" />
-                      <span className="font-semibold">{client.average_rating}</span>
+                      <span className="font-semibold">{client.average_rating || "N/A"}</span>
                     </div>
-                    <div className="text-xs text-gray-500">{client.total_reviews} reviews</div>
+                    <div className="text-xs text-gray-500">{client.total_reviews || 0} reviews</div>
                   </div>
 
                   {/* Status Badges */}
                   <div className="flex flex-col gap-2">
-                    <Badge variant={client.isverified ? "default" : "secondary"}>
-                      {client.isverified ? (
+                    <Badge variant={client.claim_status === "verified" ? "default" : "secondary"}>
+                      {client.claim_status === "verified" ? (
                         <>
                           <Shield className="h-3 w-3 mr-1" />
                           Verified
                         </>
                       ) : (
-                        "Unverified"
+                        client.claim_status || "Unclaimed"
                       )}
                     </Badge>
                     <Badge
                       variant="outline"
-                      className={client.isactive ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}
+                      className={client.is_active ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}
                     >
-                      {client.isactive ? "Active" : "Inactive"}
+                      {client.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </div>
 
                   {/* Sales Rep */}
                   <div className="text-right">
-                    <div className="text-sm font-medium">{client.sales_rep_name || "No Sales Rep"}</div>
+                    <div className="text-sm font-medium">{client.sales_rep_name || "Unassigned"}</div>
                     <div className="text-xs text-gray-500">Sales Representative</div>
                   </div>
 
@@ -294,92 +224,26 @@ export default function ClientsPage() {
                 </div>
               </div>
 
-              {/* Business Type and Place ID */}
+              {/* Business Type and Additional Info */}
               <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
-                <span>Type: {client.business_type_name || client.businesstype}</span>
-                {client.placeid && <span>Place ID: {client.placeid}</span>}
-                {client.firebaseuid && (
-                  <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700">
-                    Firebase User
-                  </Badge>
-                )}
+                <span>Industry: {client.industry_category || "Not specified"}</span>
+                {client.business_description && <span>• {client.business_description.substring(0, 100)}...</span>}
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Create Client User Dialog */}
-      <Dialog open={isCreateUserOpen} onOpenChange={setIsCreateUserOpen}>
-        <DialogContent className="max-w-md bg-white">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="text-xl font-semibold text-gray-900">Create Client User</DialogTitle>
-            <DialogDescription className="text-gray-600">
-              Create a portal user for {selectedClient?.businessname}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="client-name">Full Name</Label>
-              <Input
-                id="client-name"
-                placeholder="John Smith"
-                value={newClientUser.user_name}
-                onChange={(e) => setNewClientUser({ ...newClientUser, user_name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="client-email">Email</Label>
-              <Input
-                id="client-email"
-                type="email"
-                placeholder="john@business.com"
-                value={newClientUser.user_email}
-                onChange={(e) => setNewClientUser({ ...newClientUser, user_email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="client-role">Role</Label>
-              <Select
-                value={newClientUser.user_role}
-                onValueChange={(value) => setNewClientUser({ ...newClientUser, user_role: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="client_admin">Business Admin</SelectItem>
-                  <SelectItem value="client_manager">Business Manager</SelectItem>
-                  <SelectItem value="client_user">Business User</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="temp-password">Temporary Password (optional)</Label>
-              <Input
-                id="temp-password"
-                type="password"
-                placeholder="Leave empty for auto-generated"
-                value={newClientUser.temporary_password}
-                onChange={(e) => setNewClientUser({ ...newClientUser, temporary_password: e.target.value })}
-              />
-              <p className="text-xs text-gray-500">If empty, a secure password will be auto-generated</p>
-            </div>
-          </div>
-          <DialogFooter className="pt-4 border-t">
-            <Button variant="outline" onClick={() => setIsCreateUserOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateClientUser}
-              className="bg-primary hover:bg-primary-dark text-dark"
-              disabled={!newClientUser.user_email || !newClientUser.user_name}
-            >
-              Create User
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Client Details Modal */}
+      <ClientDetailsModal
+        client={selectedClient}
+        isOpen={isClientModalOpen}
+        onClose={() => {
+          setIsClientModalOpen(false)
+          setSelectedClient(null)
+        }}
+        onClientUpdated={handleClientUpdated}
+      />
 
       {/* Quick Stats */}
       <div className="grid gap-6 md:grid-cols-4">
@@ -389,7 +253,7 @@ export default function ClientsPage() {
               <Building className="h-5 w-5 text-blue-600" />
               <div>
                 <div className="text-2xl font-bold">{clients.length}</div>
-                <div className="text-sm text-gray-600">Total Businesses</div>
+                <div className="text-sm text-gray-600">Total Clients</div>
               </div>
             </div>
           </CardContent>
@@ -399,7 +263,7 @@ export default function ClientsPage() {
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-green-600" />
               <div>
-                <div className="text-2xl font-bold">{clients.filter((c) => c.isverified).length}</div>
+                <div className="text-2xl font-bold">{clients.filter((c) => c.claim_status === "verified").length}</div>
                 <div className="text-sm text-gray-600">Verified</div>
               </div>
             </div>
@@ -412,7 +276,7 @@ export default function ClientsPage() {
               <div>
                 <div className="text-2xl font-bold">
                   {clients.length > 0
-                    ? Math.round(clients.reduce((sum, c) => sum + c.gcsg_score, 0) / clients.length)
+                    ? Math.round(clients.reduce((sum, c) => sum + (c.gcsg_score || 0), 0) / clients.length)
                     : 0}
                 </div>
                 <div className="text-sm text-gray-600">Avg GCSG</div>
@@ -425,7 +289,7 @@ export default function ClientsPage() {
             <div className="flex items-center gap-2">
               <Star className="h-5 w-5 text-yellow-500" />
               <div>
-                <div className="text-2xl font-bold">{clients.reduce((sum, c) => sum + c.total_reviews, 0)}</div>
+                <div className="text-2xl font-bold">{clients.reduce((sum, c) => sum + (c.total_reviews || 0), 0)}</div>
                 <div className="text-sm text-gray-600">Total Reviews</div>
               </div>
             </div>
