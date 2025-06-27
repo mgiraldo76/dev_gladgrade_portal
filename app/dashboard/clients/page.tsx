@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Building, MapPin, Star, Calendar, User, Phone, Globe, Shield, TrendingUp } from "lucide-react"
+import { Plus, Search, Building, MapPin, Star, Calendar, User, Phone, Globe, Shield, TrendingUp } from 'lucide-react'
 import { apiClient } from "@/lib/api-client"
-import { ClientDetailsModal } from "@/components/client-details-modal"
+import { EditClientModal } from "@/components/edit-client-modal"
+import { useAuth } from "@/app/providers"
 
 export default function ClientsPage() {
+  const { role } = useAuth() // Use role instead of user.role
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [clients, setClients] = useState<any[]>([])
@@ -106,8 +108,8 @@ export default function ClientsPage() {
               <SelectContent>
                 <SelectItem value="all">All Businesses</SelectItem>
                 <SelectItem value="verified">Verified</SelectItem>
-                <SelectItem value="unverified">Unverified</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="claimed">Claimed</SelectItem>
+                <SelectItem value="unclaimed">Unclaimed</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -234,15 +236,16 @@ export default function ClientsPage() {
         ))}
       </div>
 
-      {/* Client Details Modal */}
-      <ClientDetailsModal
+      {/* Client Edit Modal */}
+      <EditClientModal
         client={selectedClient}
         isOpen={isClientModalOpen}
         onClose={() => {
           setIsClientModalOpen(false)
           setSelectedClient(null)
         }}
-        onClientUpdated={handleClientUpdated}
+        onSuccess={handleClientUpdated}
+        userRole={role || ""} // Use role from auth context
       />
 
       {/* Quick Stats */}

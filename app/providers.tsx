@@ -76,15 +76,23 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     console.log("🚀 Providers useEffect running...")
 
-    // Check if Firebase is properly configured
-    const hasValidConfig =
+    // Check if Firebase is properly configured - simplified check
+    const hasValidConfig = !!(
       process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
       process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
-      !process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes("your_") &&
-      !process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID.includes("your_")
+      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
+      process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+    )
 
-    console.log("🔧 Firebase configured:", !!hasValidConfig)
-    setIsFirebaseConfigured(!!hasValidConfig)
+    console.log("🔧 Firebase configured:", hasValidConfig)
+    console.log("🔧 Environment check:", {
+      apiKey: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      projectId: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      authDomain: !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      appId: !!process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    })
+
+    setIsFirebaseConfigured(hasValidConfig)
 
     if (auth && hasValidConfig) {
       console.log("🔐 Setting up Firebase auth listener...")
@@ -132,12 +140,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         unsubscribe()
       }
     } else {
-      // If Firebase is not configured, set loading to false and demo mode
-      console.log("🎭 Demo mode - Firebase not configured")
+      // If Firebase is not configured, set loading to false
+      console.log("❌ Firebase not configured or auth not available")
       setLoading(false)
-      // Set demo role for testing
-      setRole("super_admin")
-      setUser({ email: "miguel.giraldo@gladgrade.com" } as User)
     }
   }, [])
 
