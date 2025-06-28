@@ -1,10 +1,13 @@
 {
   "/page": "app/page.js",
-  "/api/clients/search-places/route": "app/api/clients/search-places/route.js",
-  "/api/sales/activities/route": "app/api/sales/activities/route.js",
-  "/api/business-sectors/route": "app/api/business-sectors/route.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/reviews/page": "app/dashboard/reviews/page.js",
-  "/dashboard/reports/page": "app/dashboard/reports/page.js",
-  "/dashboard/sales/page": "app/dashboard/sales/page.js"
+  "/api/moderation/route": "app/api/moderation/route.js",
+  "/api/moderation/stats/route": "app/api/moderation/stats/route.js",
+  "/api/moderation/message-categories/route": "app/api/moderation/message-categories/route.js",
+  "/api/employees/route": "app/api/employees/route.js",
+  "/api/settings/departments/route": "app/api/settings/departments/route.js",
+  "/dashboard/sales/page": "app/dashboard/sales/page.js",
+  "/dashboard/partners/page": "app/dashboard/partners/page.js",
+  "/dashboard/moderation/page": "app/dashboard/moderation/page.js",
+  "/dashboard/users/page": "app/dashboard/users/page.js",
+  "/dashboard/system/page": "app/dashboard/system/page.js"
 }
