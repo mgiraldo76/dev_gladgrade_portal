@@ -1,13 +1,13 @@
 {
   "/page": "app/page.js",
-  "/api/moderation/route": "app/api/moderation/route.js",
-  "/api/moderation/stats/route": "app/api/moderation/stats/route.js",
-  "/api/moderation/message-categories/route": "app/api/moderation/message-categories/route.js",
-  "/api/employees/route": "app/api/employees/route.js",
-  "/api/settings/departments/route": "app/api/settings/departments/route.js",
+  "/api/sales/activities/route": "app/api/sales/activities/route.js",
+  "/api/sales/stats/route": "app/api/sales/stats/route.js",
+  "/api/sales/prospects/route": "app/api/sales/prospects/route.js",
+  "/api/business-sectors/route": "app/api/business-sectors/route.js",
+  "/api/employees/enhanced/route": "app/api/employees/enhanced/route.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
   "/dashboard/sales/page": "app/dashboard/sales/page.js",
-  "/dashboard/partners/page": "app/dashboard/partners/page.js",
-  "/dashboard/moderation/page": "app/dashboard/moderation/page.js",
   "/dashboard/users/page": "app/dashboard/users/page.js",
-  "/dashboard/system/page": "app/dashboard/system/page.js"
+  "/dashboard/clients/page": "app/dashboard/clients/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }

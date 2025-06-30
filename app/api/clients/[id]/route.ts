@@ -42,15 +42,36 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const updates = await request.json()
 
     // Get current user for audit logging
-    const userEmail = request.headers.get("x-user-email")
-    const firebaseUid = request.headers.get("x-firebase-uid")
+    // Get current user (using same pattern as prospects API)
+  async function getCurrentUser(request: NextRequest) {
+    try {
+      const firebaseUid = request.headers.get("x-firebase-uid")
+      if (firebaseUid) {
+        const result = await query(
+          "SELECT id, full_name as name, email, role FROM employees WHERE firebase_uid = $1 AND status = 'active'",
+          [firebaseUid]
+        )
+        if (result.rows.length > 0) return result.rows[0]
+      }
 
-    let currentUser = null
-    if (firebaseUid) {
-      currentUser = await getEmployeeByAuth(firebaseUid)
-    } else if (userEmail) {
-      currentUser = await getEmployeeByAuth(undefined, userEmail)
+      const userEmail = request.headers.get("x-user-email")
+      if (userEmail) {
+        const result = await query(
+          "SELECT id, full_name as name, email, role FROM employees WHERE email = $1 AND status = 'active'",
+          [userEmail.toLowerCase()]
+        )
+        if (result.rows.length > 0) return result.rows[0]
+      }
+
+      return null
+    } catch (error) {
+      console.error("❌ Error getting current user:", error)
+      return null
     }
+  }
+
+  // Then call it like this:
+  const currentUser = await getCurrentUser(request)
 
     // Get current client data for audit comparison
     const currentResult = await query("SELECT * FROM business_clients WHERE id = $1", [clientId])
@@ -64,18 +85,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // Build update query dynamically
     const allowedFields = [
       "business_name",
-      "contact_name",
+      "contact_name", 
       "contact_email",
       "phone",
       "website",
       "business_address",
-      "city",
-      "state",
-      "zip_code",
-      "business_description",
-      "industry_category",
+      "industry_category_id",
       "claim_status",
-      "notes",
+      "sales_rep_id"
     ]
 
     const updateFields = []

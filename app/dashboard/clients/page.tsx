@@ -5,11 +5,14 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+//import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Search, Building, MapPin, Star, Calendar, User, Phone, Globe, Shield, TrendingUp } from 'lucide-react'
 import { apiClient } from "@/lib/api-client"
 import { EditClientModal } from "@/components/edit-client-modal"
 import { useAuth } from "@/app/providers"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SortAsc, SortDesc, Filter } from "lucide-react"
+
 
 export default function ClientsPage() {
   const { role } = useAuth() // Use role instead of user.role
@@ -18,6 +21,26 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<any[]>([])
   const [selectedClient, setSelectedClient] = useState<any>(null)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false)
+
+  //const [sortField, setSortField] = useState("business_name")
+  const [sortField, setSortField] = useState<SortField>("business_name")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+
+  //const [sortDirection, setSortDirection] = useState("asc")
+  const [sectorFilter, setSectorFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
+
+
+  type SortField = "business_name" | "industry_category_name" | "datecreated"
+
+const handleSort = (field: SortField) => {
+  if (sortField === field) {
+    setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+  } else {
+    setSortField(field)
+    setSortDirection("asc")
+  }
+}
 
   // Load clients on component mount
   useEffect(() => {
@@ -50,12 +73,51 @@ export default function ClientsPage() {
     loadClients() // Reload the clients list
   }
 
-  const filteredClients = clients.filter(
-    (client) =>
+  const filteredClients = clients
+  .filter((client) => {
+    // Search filter
+    const searchMatch = 
       client.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.contact_email?.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+      client.contact_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.business_address?.toLowerCase().includes(searchTerm.toLowerCase())
+
+    // Sector filter
+    const sectorMatch = sectorFilter === "all" || client.industry_category_name === sectorFilter
+
+    // Status filter
+    const statusMatch = statusFilter === "all" || 
+      (statusFilter === "verified" && client.isverified) ||
+      (statusFilter === "active" && client.isactive) ||
+      (statusFilter === "pending" && !client.isverified)
+
+    return searchMatch && sectorMatch && statusMatch
+  })
+  .sort((a, b) => {
+    let aValue = a[sortField]
+    let bValue = b[sortField]
+
+    // Handle date sorting
+    if (sortField === "datecreated") {
+      aValue = new Date(aValue).getTime()
+      bValue = new Date(bValue).getTime()
+    }
+
+    // Handle string sorting
+    if (typeof aValue === "string") {
+      aValue = aValue.toLowerCase()
+      bValue = bValue.toLowerCase()
+    }
+
+    if (sortDirection === "asc") {
+      return aValue > bValue ? 1 : -1
+    } else {
+      return aValue < bValue ? 1 : -1
+    }
+  })
+
+// Get unique sectors for filter dropdown
+const uniqueSectors = [...new Set(clients.map(c => c.industry_category_name).filter(Boolean))]
 
   if (loading) {
     return (
@@ -94,7 +156,7 @@ export default function ClientsPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Search businesses, contacts, or emails..."
+                  placeholder="Search by business name, contact, email, or address..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -127,7 +189,7 @@ export default function ClientsPage() {
                     <Building className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold">{client.business_name}</h3>
+                    <h3 className="text-lg font-semibold"> {client.business_name  || "Unnamed Business"}</h3>
                     <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
                       {client.contact_name && (
                         <div className="flex items-center gap-1">
