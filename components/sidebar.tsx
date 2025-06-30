@@ -20,10 +20,93 @@ import {
   Heart,
   TrendingUp,
 } from "lucide-react"
+import { useState, useEffect } from "react"
+
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { role } = useAuth() // Using role from our auth context instead of customClaims
+  const { role, user } = useAuth() // Add user here
+  const [hasClientAccess, setHasClientAccess] = useState(false)
+
+  // Check client access for any logged-in user
+  useEffect(() => {
+    const checkAccess = async () => {
+      // Super admin and admin always have client access
+      if (role === "super_admin" || role === "admin" || role === "employee") {
+        setHasClientAccess(true)
+        return
+      }
+      
+      // For other users, check database
+      if (user?.uid || user?.email) {
+        try {
+          const response = await fetch("/api/user-access", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              userId: user.uid, // Try ID first
+              email: user.email // Fallback to email
+            })
+          })
+          const data = await response.json()
+          setHasClientAccess(data.hasClientAccess)
+          
+          // Optional: Log for debugging
+          console.log("Client access check:", {
+            isEmployee: data.isEmployee,
+            hasAccess: data.hasClientAccess,
+            userInfo: data.userInfo
+          })
+        } catch (error) {
+          console.error("Access check failed:", error)
+          setHasClientAccess(false)
+        }
+      } else {
+        setHasClientAccess(false)
+      }
+    }
+    
+    checkAccess()
+  }, [role, user?.uid, user?.email])
+
+  // Function to check if user has client access based on enhanced access control
+  const checkClientAccess = async () => {
+    try {
+      // Check if user is a GladGrade employee
+      const isEmployee = user?.email?.endsWith("@gladgrade.com") || false
+      
+      if (!isEmployee) {
+        setHasClientAccess(false)
+        return
+      }
+
+      // For GladGrade employees, check department and role
+      const response = await fetch("/api/employees/enhanced")
+      if (response.ok) {
+        const data = await response.json()
+        const currentEmployee = data.data.find((emp: any) => emp.email === user?.email)
+        
+        if (currentEmployee) {
+          // Check access criteria:
+          // 1. Department = "Sales" OR
+          // 2. Role in ("CEO", "CCO", "Sales Manager")
+          const hasSalesDepartment = currentEmployee.department_name === "Sales"
+          const hasLeadershipRole = ["CEO", "CCO", "Sales Manager"].includes(currentEmployee.position_title)
+          
+          setHasClientAccess(hasSalesDepartment || hasLeadershipRole)
+        }
+      }
+    } catch (error) {
+      console.error("Error checking client access:", error)
+      setHasClientAccess(false)
+    }
+  }
+
+  useEffect(() => {
+    if (user?.email) {
+      checkClientAccess()
+    }
+  }, [user?.email])
 
   // Function to check if user has sales access
   const hasSalesAccess = () => {
@@ -36,7 +119,7 @@ export function Sidebar() {
     return false
   }
 
-  // Define navigation items with role-based access (RESTORED TO ORIGINAL)
+  // Define navigation items with enhanced role-based access
   const navItems = [
     {
       name: "Dashboard",
@@ -48,7 +131,7 @@ export function Sidebar() {
       name: "Sales Pipeline",
       href: "/dashboard/sales",
       icon: TrendingUp,
-      roles: ["super_admin", "admin", "employee"], // Added employee back
+      roles: ["super_admin", "admin", "employee"],
       requiresSalesAccess: true,
     },
     {
@@ -61,19 +144,24 @@ export function Sidebar() {
       name: "Clients",
       href: "/dashboard/clients",
       icon: Building,
-      roles: ["super_admin", "admin"], // Only admins can see clients (RESTORED)
+      roles: ["super_admin", "admin", "employee"], // Updated to include employees
+      requiresClientAccess: true, // New flag for client access
     },
+
+
+
+
     {
       name: "Reports",
       href: "/dashboard/reports",
       icon: BarChart3,
-      roles: ["super_admin", "admin", "client"], // Removed client access (FIXED)
+      roles: ["super_admin", "admin"],
     },
     {
       name: "Partners",
       href: "/dashboard/partners",
       icon: Heart,
-      roles: ["super_admin", "admin"], // Removed client access (FIXED)
+      roles: ["super_admin", "admin"],
     },
     {
       name: "Content Moderation",
@@ -91,13 +179,13 @@ export function Sidebar() {
       name: "System Admin",
       href: "/dashboard/system",
       icon: Database,
-      roles: ["super_admin"], // Only super admin
+      roles: ["super_admin"],
     },
     {
       name: "Settings",
       href: "/dashboard/settings",
       icon: Settings,
-      roles: ["super_admin", "admin"], // Removed client access (FIXED)
+      roles: ["super_admin", "admin"],
     },
     {
       name: "Help & Support",
@@ -113,16 +201,24 @@ export function Sidebar() {
     },
   ]
 
-  // Enhanced filtering logic that considers sales access
+  // Enhanced filtering logic that considers both sales and client access
   const filteredNavItems = navItems.filter((item) => {
-    // Check basic role access
     const hasRoleAccess = role && item.roles.includes(role)
-
-    // For sales-specific items, also check if user has sales access
+  
     if (item.requiresSalesAccess) {
       return hasRoleAccess && hasSalesAccess()
     }
-
+  
+    // Add this new check for client access
+    if (item.requiresClientAccess) {
+      // Super admin and admin always have access
+      if (role === "super_admin" || role === "admin") {
+        return hasRoleAccess
+      }
+      // For employees, check the dynamic access
+      return hasRoleAccess && hasClientAccess
+    }
+  
     return hasRoleAccess
   })
 
@@ -142,6 +238,12 @@ export function Sidebar() {
                 {role === "super_admin" ? "Super Admin" : role.replace("_", " ")}
               </span>
             </div>
+            {/* Show client access indicator for employees */}
+            {role === "employee" && hasClientAccess && (
+              <div className="mt-1 text-xs text-green-600">
+                ✓ Client Access Enabled
+              </div>
+            )}
           </div>
         )}
 

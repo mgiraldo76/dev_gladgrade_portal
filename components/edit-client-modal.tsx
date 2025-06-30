@@ -150,39 +150,42 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
+  
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       }
-
-      // Add authentication headers
+  
       if (user?.email) {
         headers["x-user-email"] = user.email
       }
-
+  
       console.log("🔍 Submitting client update with headers:", headers)
       console.log("🔍 Form data:", formData)
-
+  
       const response = await fetch(`/api/clients/${client.id}`, {
         method: "PUT",
         headers,
         body: JSON.stringify(formData),
       })
-
-      if (response.ok) {
-        const result = await response.json()
+  
+      console.log("🔍 Response status:", response.status) // Add this
+      const result = await response.json()
+      console.log("🔍 API Response:", result) // Add this
+  
+      if (response.ok && result.success) {
         console.log("✅ Client updated successfully:", result)
         onSuccess()
         onClose()
       } else {
-        const errorData = await response.json()
-        console.error("Failed to update client:", errorData)
-        alert(`Failed to update client: ${errorData.error}`)
+        console.error("Failed to update client:", result)
+        alert(`Failed to update client: ${result.error || result.details || "Unknown error"}`)
       }
     } catch (error) {
       console.error("Error updating client:", error)
-      alert("Error updating client")
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      alert(`Error updating client: ${errorMessage}`)
+
     } finally {
       setLoading(false)
     }
