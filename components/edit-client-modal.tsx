@@ -1,3 +1,5 @@
+// components/edit-client-modal.tsx - Enhanced with business_locations
+
 "use client"
 
 import type React from "react"
@@ -29,6 +31,88 @@ interface EditClientModalProps {
   userRole: string
 }
 
+// US States dropdown data
+const US_STATES = [
+  { value: "AL", label: "Alabama" },
+  { value: "AK", label: "Alaska" },
+  { value: "AZ", label: "Arizona" },
+  { value: "AR", label: "Arkansas" },
+  { value: "CA", label: "California" },
+  { value: "CO", label: "Colorado" },
+  { value: "CT", label: "Connecticut" },
+  { value: "DE", label: "Delaware" },
+  { value: "FL", label: "Florida" },
+  { value: "GA", label: "Georgia" },
+  { value: "HI", label: "Hawaii" },
+  { value: "ID", label: "Idaho" },
+  { value: "IL", label: "Illinois" },
+  { value: "IN", label: "Indiana" },
+  { value: "IA", label: "Iowa" },
+  { value: "KS", label: "Kansas" },
+  { value: "KY", label: "Kentucky" },
+  { value: "LA", label: "Louisiana" },
+  { value: "ME", label: "Maine" },
+  { value: "MD", label: "Maryland" },
+  { value: "MA", label: "Massachusetts" },
+  { value: "MI", label: "Michigan" },
+  { value: "MN", label: "Minnesota" },
+  { value: "MS", label: "Mississippi" },
+  { value: "MO", label: "Missouri" },
+  { value: "MT", label: "Montana" },
+  { value: "NE", label: "Nebraska" },
+  { value: "NV", label: "Nevada" },
+  { value: "NH", label: "New Hampshire" },
+  { value: "NJ", label: "New Jersey" },
+  { value: "NM", label: "New Mexico" },
+  { value: "NY", label: "New York" },
+  { value: "NC", label: "North Carolina" },
+  { value: "ND", label: "North Dakota" },
+  { value: "OH", label: "Ohio" },
+  { value: "OK", label: "Oklahoma" },
+  { value: "OR", label: "Oregon" },
+  { value: "PA", label: "Pennsylvania" },
+  { value: "RI", label: "Rhode Island" },
+  { value: "SC", label: "South Carolina" },
+  { value: "SD", label: "South Dakota" },
+  { value: "TN", label: "Tennessee" },
+  { value: "TX", label: "Texas" },
+  { value: "UT", label: "Utah" },
+  { value: "VT", label: "Vermont" },
+  { value: "VA", label: "Virginia" },
+  { value: "WA", label: "Washington" },
+  { value: "WV", label: "West Virginia" },
+  { value: "WI", label: "Wisconsin" },
+  { value: "WY", label: "Wyoming" },
+  { value: "DC", label: "District of Columbia" }
+]
+
+// Postal code validation function
+function formatPostalCode(code: string, country: string): string {
+  const cleaned = code.replace(/[^A-Za-z0-9]/g, "")
+  
+  switch (country) {
+    case "US":
+    case "USA":
+      if (cleaned.length === 5) return cleaned
+      if (cleaned.length === 9) return `${cleaned.slice(0, 5)}-${cleaned.slice(5)}`
+      return code
+    case "CA":
+      if (cleaned.length === 6) {
+        return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`.toUpperCase()
+      }
+      return code.toUpperCase()
+    case "MX":
+      if (cleaned.length === 5) return cleaned
+      return code
+    case "ES":
+    case "IT":
+      if (cleaned.length === 5) return cleaned
+      return code
+    default:
+      return code
+  }
+}
+
 export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }: EditClientModalProps) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -36,23 +120,38 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [clientUsers, setClientUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
-  const [businessSectors, setBusinessSectors] = useState([])
+  const [industryCategories, setIndustryCategories] = useState([])
+  const [salesReps, setSalesReps] = useState([])
+  const [businessLocations, setBusinessLocations] = useState([])
+  const [loadingLocations, setLoadingLocations] = useState(false)
   const [isUserModalOpen, setIsUserModalOpen] = useState(false)
 
+  // ✅ ENHANCED: Client form data (basic info only)
   const [formData, setFormData] = useState({
     business_name: "",
     contact_name: "",
     contact_email: "",
     phone: "",
-    business_address: "",
-    city: "",
-    state: "",
-    zip_code: "",
     website: "",
-    industry_category: "",
+    industry_category_id: "",
     business_description: "",
     claim_status: "unclaimed",
     notes: "",
+    sales_rep_id: "",
+  })
+
+  // ✅ NEW: Primary location form data (address components)
+  const [locationData, setLocationData] = useState({
+    id: null as number | null,
+    location_name: "",
+    address: "",
+    city: "",
+    state: "",
+    country: "USA",
+    postal_code: "",
+    phone: "",
+    manager_name: "",
+    manager_email: "",
   })
 
   const [newUser, setNewUser] = useState({
@@ -62,7 +161,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     temporary_password: "",
   })
 
-  // Initialize form data when client changes
+  // ✅ ENHANCED: Initialize form data and load business locations
   useEffect(() => {
     if (client) {
       console.log("🔍 Loading client data:", client)
@@ -71,31 +170,51 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         contact_name: client.contact_name || "",
         contact_email: client.contact_email || "",
         phone: client.phone || "",
-        business_address: client.business_address || "",
-        city: client.city || "",
-        state: client.state || "",
-        zip_code: client.zip_code || "",
         website: client.website || "",
-        industry_category: client.industry_category || "",
+        industry_category_id: client.industry_category_id ? client.industry_category_id.toString() : "", // ✅ This is fine
         business_description: client.business_description || "",
         claim_status: client.claim_status || "unclaimed",
         notes: client.notes || "",
+        sales_rep_id: client.sales_rep_id ? client.sales_rep_id.toString() : "", // ✅ This is fine
       })
-      loadBusinessSectors()
+      loadIndustryCategories()
+      loadSalesReps()
       loadClientUsers()
       loadClientActivities()
+      loadBusinessLocations() // ✅ NEW: Load business locations
     }
   }, [client])
 
-  const loadBusinessSectors = async () => {
+  const loadIndustryCategories = async () => {
     try {
-      const response = await fetch("/api/business-sectors")
+      const response = await fetch("/api/industry-categories")
       if (response.ok) {
         const data = await response.json()
-        setBusinessSectors(data.data || [])
+        setIndustryCategories(data.data || [])
       }
     } catch (error) {
-      console.error("Error loading business sectors:", error)
+      console.error("Error loading industry categories:", error)
+    }
+  }
+
+  const loadSalesReps = async () => {
+    try {
+      const headers: Record<string, string> = {}
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+      
+      const response = await fetch("/api/employees", { headers })
+      if (response.ok) {
+        const data = await response.json()
+        const salesTeam = data.data.filter((emp: any) => 
+          emp.department_name === "Sales" || 
+          ["CEO", "CCO", "Sales Manager"].includes(emp.role)
+        )
+        setSalesReps(salesTeam)
+      }
+    } catch (error) {
+      console.error("Error loading sales reps:", error)
     }
   }
 
@@ -143,8 +262,58 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   }
 
+  // ✅ NEW: Load business locations
+  const loadBusinessLocations = async () => {
+    if (!client?.id) return
+
+    setLoadingLocations(true)
+    try {
+      const headers: Record<string, string> = {}
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      const response = await fetch(`/api/clients/${client.id}/locations`, { headers })
+      if (response.ok) {
+        const data = await response.json()
+        const locations = data.data || []
+        setBusinessLocations(locations)
+        
+        // ✅ Load primary location data
+        const primaryLocation = locations.find((loc: any) => loc.is_primary) || locations[0]
+        if (primaryLocation) {
+          setLocationData({
+            id: primaryLocation.id,
+            location_name: primaryLocation.location_name || "",
+            address: primaryLocation.address || "",
+            city: primaryLocation.city || "",
+            state: primaryLocation.state || "",
+            country: primaryLocation.country || "USA",
+            postal_code: primaryLocation.postal_code || "",
+            phone: primaryLocation.phone || "",
+            manager_name: primaryLocation.manager_name || "",
+            manager_email: primaryLocation.manager_email || "",
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Error loading business locations:", error)
+    } finally {
+      setLoadingLocations(false)
+    }
+  }
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleLocationChange = (field: string, value: string) => {
+    setLocationData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleZipChange = (value: string) => {
+    const formatted = formatPostalCode(value, locationData.country)
+    setLocationData((prev) => ({ ...prev, postal_code: formatted }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -156,87 +325,61 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         "Content-Type": "application/json",
       }
 
-      // Add authentication headers
       if (user?.email) {
         headers["x-user-email"] = user.email
       }
 
       console.log("🔍 Submitting client update with headers:", headers)
-      console.log("🔍 Form data:", formData)
+      console.log("🔍 Client form data:", formData)
+      console.log("🔍 Location form data:", locationData)
 
-      const response = await fetch(`/api/clients/${client.id}`, {
+      // ✅ 1. Update client basic info
+      // ✅ Handle the "unassigned" sales rep case
+      const submitData = {
+        ...formData,
+        sales_rep_id: formData.sales_rep_id === "unassigned" ? "" : formData.sales_rep_id
+      }
+      const clientResponse = await fetch(`/api/clients/${client.id}`, {
         method: "PUT",
         headers,
-        body: JSON.stringify(formData),
+        body: JSON.stringify(submitData), // ✅ Use modified data
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        console.log("✅ Client updated successfully:", result)
-        onSuccess()
-        onClose()
-      } else {
-        const errorData = await response.json()
-        console.error("Failed to update client:", errorData)
-        alert(`Failed to update client: ${errorData.error}`)
+      if (!clientResponse.ok) {
+        const errorData = await clientResponse.json()
+        throw new Error(errorData.error || "Failed to update client")
       }
+
+      // ✅ 2. Update business location
+      if (locationData.id) {
+        const formattedZip = formatPostalCode(locationData.postal_code, locationData.country)
+        
+        const locationResponse = await fetch(`/api/clients/${client.id}/locations/${locationData.id}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({
+            ...locationData,
+            postal_code: formattedZip,
+          }),
+        })
+
+        if (!locationResponse.ok) {
+          const errorData = await locationResponse.json()
+          console.error("❌ Failed to update location:", errorData)
+          // Don't fail the entire operation if location update fails
+        } else {
+          console.log("✅ Business location updated successfully")
+        }
+      }
+
+      console.log("✅ Client updated successfully")
+      onSuccess()
+      onClose()
     } catch (error) {
-      console.error("Error updating client:", error)
-      alert("Error updating client")
+      console.error("❌ Error updating client:", error)
+      // Add user-friendly error handling here
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleCreateUser = async () => {
-    if (!newUser.user_email || !newUser.user_name) {
-      alert("Email and name are required")
-      return
-    }
-
-    try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch("/api/clients", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          ...newUser,
-          business_id: client.id,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        setNewUser({
-          user_email: "",
-          user_name: "",
-          user_role: "client_admin",
-          temporary_password: "",
-        })
-        setIsUserModalOpen(false)
-        loadClientUsers() // Reload users list
-
-        if (result.firebase_account_created) {
-          alert(
-            `✅ Client user created successfully!\n\n🔥 Firebase account created\n🔑 Temporary password: ${result.temporary_password || "Auto-generated"}\n\n📧 The client can now log in with their email and password.`,
-          )
-        } else {
-          alert("✅ Client user created successfully in database only (no Firebase account)")
-        }
-      } else {
-        alert(`Error: ${result.error}`)
-      }
-    } catch (error) {
-      console.error("❌ Error creating client user:", error)
-      alert("Failed to create client user. Please try again.")
     }
   }
 
@@ -266,107 +409,12 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
           </DialogHeader>
 
           <Tabs defaultValue="details" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="location">Location</TabsTrigger>
               <TabsTrigger value="users">Portal Users ({clientUsers.length})</TabsTrigger>
               <TabsTrigger value="overview">Overview</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Business Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Building className="h-4 w-4 text-gray-500" />
-                      <span className="font-medium">{client.business_name || "Unnamed Business"}</span>
-                    </div>
-                    {client.industry_category && (
-                      <div className="text-sm text-gray-600">Industry: {client.industry_category}</div>
-                    )}
-                    {client.business_address && (
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-gray-500 mt-0.5" />
-                        <span className="text-sm">
-                          {client.business_address}
-                          {client.city && `, ${client.city}`}
-                          {client.state && `, ${client.state}`}
-                          {client.zip_code && ` ${client.zip_code}`}
-                        </span>
-                      </div>
-                    )}
-                    {client.website && (
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4 text-gray-500" />
-                        <a
-                          href={client.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:underline"
-                        >
-                          {client.website}
-                        </a>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Contact Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {client.contact_name && (
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">{client.contact_name}</span>
-                      </div>
-                    )}
-                    {client.contact_email && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-gray-500" />
-                        <a href={`mailto:${client.contact_email}`} className="text-sm text-blue-600 hover:underline">
-                          {client.contact_email}
-                        </a>
-                      </div>
-                    )}
-                    {client.phone && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-gray-500" />
-                        <a href={`tel:${client.phone}`} className="text-sm text-blue-600 hover:underline">
-                          {client.phone}
-                        </a>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Client Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm">Created: {new Date(client.created_at).toLocaleDateString()}</span>
-                    </div>
-                    <div className="text-sm text-gray-600">Sales Rep: {client.sales_rep_name || "Unassigned"}</div>
-                    <div className="text-sm text-gray-600">Client ID: {client.id}</div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Notes</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-gray-600">{client.notes || "No notes available"}</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
 
             <TabsContent value="details" className="space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -410,42 +458,6 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="business_address">Business Address</Label>
-                  <Input
-                    id="business_address"
-                    value={formData.business_address}
-                    onChange={(e) => handleInputChange("business_address", e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      value={formData.city}
-                      onChange={(e) => handleInputChange("city", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Input
-                      id="state"
-                      value={formData.state}
-                      onChange={(e) => handleInputChange("state", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="zip_code">ZIP Code</Label>
-                    <Input
-                      id="zip_code"
-                      value={formData.zip_code}
-                      onChange={(e) => handleInputChange("zip_code", e.target.value)}
-                    />
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="website">Website</Label>
@@ -456,41 +468,72 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="industry_category">Industry</Label>
+                    <Label htmlFor="industry_category_id">Industry</Label>
                     <Select
-                      value={formData.industry_category}
-                      onValueChange={(value) => handleInputChange("industry_category", value)}
+                      value={formData.industry_category_id || undefined} // ✅ Convert empty string to undefined
+                      onValueChange={(value) => handleInputChange("industry_category_id", value || "")}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select industry" />
                       </SelectTrigger>
                       <SelectContent>
-                        {businessSectors.map((sector: any) => (
-                          <SelectItem key={sector.id} value={sector.businesssectorname}>
-                            {sector.businesssectorname}
-                          </SelectItem>
-                        ))}
+                        {industryCategories
+                          .filter((category: any) => category.id && category.name) // ✅ Filter out invalid records
+                          .map((category: any) => (
+                            <SelectItem 
+                              key={category.id} 
+                              value={category.id.toString()}
+                            >
+                              {category.name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="claim_status">Claim Status</Label>
-                  <Select
-                    value={formData.claim_status}
-                    onValueChange={(value) => handleInputChange("claim_status", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unclaimed">Unclaimed</SelectItem>
-                      <SelectItem value="claimed">Claimed</SelectItem>
-                      <SelectItem value="verified">Verified</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sales_rep_id">Account Owner</Label>
+                    <Select
+                      value={formData.sales_rep_id || undefined} // ✅ Convert empty string to undefined
+                      onValueChange={(value) => handleInputChange("sales_rep_id", value || "")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Assign sales rep" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem> {/* ✅ Use non-empty value */}
+                        {salesReps
+                          .filter((rep: any) => rep.id && rep.full_name) // ✅ Filter out invalid records
+                          .map((rep: any) => (
+                            <SelectItem 
+                              key={rep.id} 
+                              value={rep.id.toString()}
+                            >
+                              {rep.full_name} ({rep.role})
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="claim_status">Claim Status</Label>
+                    <Select
+                      value={formData.claim_status}
+                      onValueChange={(value) => handleInputChange("claim_status", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unclaimed">Unclaimed</SelectItem>
+                        <SelectItem value="claimed">Claimed</SelectItem>
+                        <SelectItem value="verified">Verified</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -524,6 +567,143 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
               </form>
             </TabsContent>
 
+            {/* ✅ NEW: Location Tab with Address Components */}
+            <TabsContent value="location" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Primary Business Location</CardTitle>
+                  <p className="text-sm text-gray-600">Manage the main business address and location details</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {loadingLocations ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-primary mx-auto"></div>
+                      <p className="text-sm text-gray-600 mt-2">Loading location...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="location_name">Location Name</Label>
+                        <Input
+                          id="location_name"
+                          value={locationData.location_name}
+                          onChange={(e) => handleLocationChange("location_name", e.target.value)}
+                          placeholder="Main Office, Headquarters, etc."
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="address">Street Address</Label>
+                        <Input
+                          id="address"
+                          value={locationData.address}
+                          onChange={(e) => handleLocationChange("address", e.target.value)}
+                          placeholder="123 Main Street"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="location_city">City</Label>
+                          <Input
+                            id="location_city"
+                            value={locationData.city}
+                            onChange={(e) => handleLocationChange("city", e.target.value)}
+                            placeholder="Miami"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="location_state">State</Label>
+                          <Select
+                            value={locationData.state || undefined} // ✅ Convert empty string to undefined
+                            onValueChange={(value) => handleLocationChange("state", value || "")}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select state" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {US_STATES.map((state) => (
+                                <SelectItem key={state.value} value={state.value}>
+                                  {state.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="location_postal_code">ZIP Code</Label>
+                          <Input
+                            id="location_postal_code"
+                            value={locationData.postal_code}
+                            onChange={(e) => handleZipChange(e.target.value)}
+                            placeholder="33101 or 33101-1234"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="location_country">Country</Label>
+                          <Select
+                            value={locationData.country}
+                            onValueChange={(value) => handleLocationChange("country", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="USA">United States</SelectItem>
+                              <SelectItem value="CA">Canada</SelectItem>
+                              <SelectItem value="MX">Mexico</SelectItem>
+                              <SelectItem value="ES">Spain</SelectItem>
+                              <SelectItem value="IT">Italy</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="location_phone">Location Phone</Label>
+                          <Input
+                            id="location_phone"
+                            value={locationData.phone}
+                            onChange={(e) => handleLocationChange("phone", e.target.value)}
+                            placeholder="Location-specific phone number"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="manager_name">Location Manager</Label>
+                          <Input
+                            id="manager_name"
+                            value={locationData.manager_name}
+                            onChange={(e) => handleLocationChange("manager_name", e.target.value)}
+                            placeholder="Manager name"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="manager_email">Manager Email</Label>
+                          <Input
+                            id="manager_email"
+                            type="email"
+                            value={locationData.manager_email}
+                            onChange={(e) => handleLocationChange("manager_email", e.target.value)}
+                            placeholder="manager@business.com"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-4">
+                        <Button onClick={handleSubmit} disabled={loading}>
+                          {loading ? "Saving..." : "Save Location"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             <TabsContent value="users" className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Portal Users</h3>
@@ -539,30 +719,17 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                   <p className="text-gray-600">Loading users...</p>
                 </div>
               ) : clientUsers.length > 0 ? (
-                <div className="space-y-3">
-                  {clientUsers.map((user: any) => (
-                    <Card key={user.id}>
+                <div className="space-y-2">
+                  {clientUsers.map((clientUser: any) => (
+                    <Card key={clientUser.id}>
                       <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                              <User className="h-5 w-5 text-primary" />
-                            </div>
-                            <div>
-                              <p className="font-medium">{user.user_name}</p>
-                              <p className="text-sm text-gray-600">{user.user_email}</p>
-                              <Badge variant="outline" className="text-xs mt-1">
-                                {user.user_role}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm">
-                              Edit
-                            </Button>
-                            <Button variant="outline" size="sm">
-                              Reset Password
-                            </Button>
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h4 className="font-medium">{clientUser.user_name}</h4>
+                            <p className="text-sm text-gray-600">{clientUser.user_email}</p>
+                            <Badge variant="outline" className="mt-1">
+                              {clientUser.user_role}
+                            </Badge>
                           </div>
                         </div>
                       </CardContent>
@@ -572,84 +739,112 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
               ) : (
                 <div className="text-center py-8">
                   <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600">No portal users found for this client</p>
-                  <Button onClick={() => setIsUserModalOpen(true)} className="mt-4" variant="outline">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add First User
-                  </Button>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No portal users yet</h3>
+                  <p className="text-gray-600 mb-4">Add the first user to give this client access to the portal.</p>
                 </div>
               )}
             </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
 
-      {/* Create User Modal */}
-      <Dialog open={isUserModalOpen} onOpenChange={setIsUserModalOpen}>
-        <DialogContent className="max-w-md bg-white">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="text-xl font-semibold text-gray-900">Create Client User</DialogTitle>
-            <DialogDescription className="text-gray-600">
-              Create a portal user for {client?.business_name || "this business"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="user-name">Full Name</Label>
-              <Input
-                id="user-name"
-                placeholder="John Smith"
-                value={newUser.user_name}
-                onChange={(e) => setNewUser({ ...newUser, user_name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="user-email">Email</Label>
-              <Input
-                id="user-email"
-                type="email"
-                placeholder="john@business.com"
-                value={newUser.user_email}
-                onChange={(e) => setNewUser({ ...newUser, user_email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="user-role">Role</Label>
-              <Select value={newUser.user_role} onValueChange={(value) => setNewUser({ ...newUser, user_role: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="client_admin">Business Admin</SelectItem>
-                  <SelectItem value="client_manager">Business Manager</SelectItem>
-                  <SelectItem value="client_user">Business User</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="temp-password">Temporary Password (optional)</Label>
-              <Input
-                id="temp-password"
-                type="password"
-                placeholder="Leave empty for auto-generated"
-                value={newUser.temporary_password}
-                onChange={(e) => setNewUser({ ...newUser, temporary_password: e.target.value })}
-              />
-              <p className="text-xs text-gray-500">If empty, a secure password will be auto-generated</p>
-            </div>
-          </div>
-          <DialogFooter className="pt-4 border-t">
-            <Button variant="outline" onClick={() => setIsUserModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateUser}
-              className="bg-primary hover:bg-primary-dark text-dark"
-              disabled={!newUser.user_email || !newUser.user_name}
-            >
-              Create User
-            </Button>
-          </DialogFooter>
+            <TabsContent value="overview" className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Business Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Building className="h-4 w-4 text-gray-500" />
+                      <span className="font-medium">{client.business_name || "Unnamed Business"}</span>
+                    </div>
+                    {client.industry_category && (
+                      <div className="text-sm text-gray-600">Industry: {client.industry_category}</div>
+                    )}
+                    {client.website && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Globe className="h-3 w-3 text-gray-500" />
+                        <a href={client.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                          {client.website}
+                        </a>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Contact Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {client.contact_name && (
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-gray-500" />
+                        <span>{client.contact_name}</span>
+                      </div>
+                    )}
+                    {client.contact_email && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Mail className="h-3 w-3 text-gray-500" />
+                        <a href={`mailto:${client.contact_email}`} className="text-blue-600 hover:underline">
+                          {client.contact_email}
+                        </a>
+                      </div>
+                    )}
+                    {client.phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-3 w-3 text-gray-500" />
+                        <a href={`tel:${client.phone}`} className="text-blue-600 hover:underline">
+                          {client.phone}
+                        </a>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Business Address</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {locationData.address && (
+                      <div className="flex items-start gap-2 text-sm">
+                        <MapPin className="h-3 w-3 text-gray-500 mt-0.5" />
+                        <div>
+                          <div>{locationData.address}</div>
+                          <div>{locationData.city}, {locationData.state} {locationData.postal_code}</div>
+                          <div>{locationData.country}</div>
+                        </div>
+                      </div>
+                    )}
+                    {!locationData.address && (
+                      <div className="text-sm text-gray-500">No address information available</div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Account Details</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="h-3 w-3 text-gray-500" />
+                      <span>Created: {new Date(client.created_at || Date.now()).toLocaleDateString()}</span>
+                    </div>
+                    {client.sales_rep_name && (
+                      <div className="text-sm">
+                        <span className="text-gray-600">Account Owner: </span>
+                        <span className="font-medium">{client.sales_rep_name}</span>
+                      </div>
+                    )}
+                    <div className="text-sm">
+                      <span className="text-gray-600">Status: </span>
+                      <Badge className={getStatusColor(client.claim_status)}>{client.claim_status}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </>

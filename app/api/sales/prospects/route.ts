@@ -1,3 +1,5 @@
+// app/api/sales/prospects/route.ts
+
 import { type NextRequest, NextResponse } from "next/server"
 import { query, getClient } from "@/lib/database"
 import { getEmployeeByAuth } from "@/lib/auth-utils"
@@ -125,18 +127,25 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/sales/prospects - Create new prospect (assigned to creator)
+
+// POST /api/sales/prospects - Create new prospect with address components
 export async function POST(request: NextRequest) {
   const client = await getClient()
 
   try {
     const body = await request.json()
-    console.log("📝 Creating prospect with data:", body)
+    console.log("📝 Creating prospect with enhanced address data:", body)
 
     const {
       business_name,
       place_id,
-      address,
+      // ✅ ENHANCED: Individual address components
+      street_address,
+      city,
+      state,
+      zip_code,
+      country = "US",
+      formatted_address, // Fallback
       phone,
       website,
       industry,
@@ -146,7 +155,6 @@ export async function POST(request: NextRequest) {
       priority = "medium",
       notes,
       services = [],
-      // Allow manual assignment for testing
       assigned_salesperson_id,
     } = body
 
@@ -155,89 +163,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Business name is required" }, { status: 400 })
     }
 
-    // Get current user (the person creating the prospect)
+    // Get current user
     const currentUser = await getCurrentUser(request)
-
-    // If no authenticated user found, use the manually assigned salesperson or default to Ada
-    let finalSalespersonId = assigned_salesperson_id || 7 // Default to Ada for now
+    let finalSalespersonId = assigned_salesperson_id || 7 // Default to Ada
 
     if (currentUser) {
-      // IMPORTANT: The prospect is assigned to the person who creates it
       finalSalespersonId = currentUser.id
       console.log(`🔍 Assigning prospect to authenticated creator: ${currentUser.name} (ID: ${finalSalespersonId})`)
-    } else {
-      console.log(`⚠️ No authenticated user found, using assigned_salesperson_id: ${finalSalespersonId}`)
     }
 
     await client.query("BEGIN")
 
-    // Insert prospect - assigned to the creator or specified salesperson
+    // ✅ ENHANCED: Insert prospect with address components
     const prospectResult = await client.query(
       `INSERT INTO prospects (
-        business_name, place_id, formatted_address, phone, website, business_type,
+        business_name, place_id, formatted_address, 
+        street_address, city, state, zip_code, country,
+        phone, website, business_type,
         contact_name, contact_email, assigned_salesperson_id, priority, 
         estimated_value, notes, status, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
       RETURNING *`,
       [
         business_name.trim(),
         place_id || null,
-        address || null,
+        formatted_address || `${street_address}, ${city}, ${state} ${zip_code}`.trim(),
+        // ✅ NEW: Individual address components
+        street_address || null,
+        city || null,
+        state || null,
+        zip_code || null,
+        country || "US",
         phone || null,
         website || null,
         industry || null,
-        contact_name?.trim() || null,
-        contact_email?.toLowerCase().trim() || null,
+        contact_name || null,
+        contact_email || null,
         finalSalespersonId,
         priority,
-        Number.parseFloat(estimated_value?.toString() || "0") || 0,
+        Number.parseFloat(estimated_value) || 0,
         notes || null,
-        "new",
-      ],
+        "new"
+      ]
     )
 
     const prospect = prospectResult.rows[0]
+    console.log("✅ Created prospect with ID:", prospect.id)
 
-    // Add services to prospect if provided
-    if (services && services.length > 0) {
-      for (const serviceId of services) {
+    // Add services if provided
+    if (services.length > 0) {
+      for (const service of services) {
         await client.query(
-          `INSERT INTO prospect_services (prospect_id, service_id, quantity)
-           VALUES ($1, $2, $3)`,
-          [prospect.id, serviceId, 1],
+          `INSERT INTO prospect_services (prospect_id, service_id, quantity, custom_price, notes)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [prospect.id, service.service_id, service.quantity || 1, service.custom_price, service.notes]
         )
       }
     }
 
-    // Log initial activity
-    await client.query(
-      `INSERT INTO sales_activities (prospect_id, employee_id, activity_type, subject, description, completed_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())`,
-      [
-        prospect.id,
-        finalSalespersonId,
-        "prospect_created",
-        "New prospect created",
-        `Prospect ${business_name} created ${currentUser ? `by ${currentUser.name}` : "via API"} with ${services.length} services assigned`,
-      ],
-    )
-
     await client.query("COMMIT")
-
-    // Log the prospect creation in audit log
-    if (currentUser) {
-      await AuditLogger.logProspectCreation(currentUser.id, currentUser.name, currentUser.role, prospect.id, {
-        business_name,
-        contact_name,
-        contact_email,
-        assigned_salesperson_id: finalSalespersonId,
-        estimated_value,
-        priority,
-        services_count: services.length,
-      })
-    }
-
-    console.log("✅ Prospect created successfully with ID:", prospect.id)
 
     return NextResponse.json({
       success: true,
@@ -246,6 +230,13 @@ export async function POST(request: NextRequest) {
       debug: {
         authenticated_user: currentUser ? currentUser.name : "None",
         assigned_to_id: finalSalespersonId,
+                  address_components: {
+          street_address: prospect.street_address,
+          city: prospect.city,
+          state: prospect.state,
+          zip_code: prospect.zip_code,
+          country: prospect.country
+        }
       },
     })
   } catch (error: unknown) {
@@ -266,7 +257,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT /api/sales/prospects - Update prospect with ownership change restrictions
+
+
+
+// PUT /api/sales/prospects - Update prospect with address components
 export async function PUT(request: NextRequest) {
   const client = await getClient()
 
@@ -325,13 +319,34 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Update prospect
+    // ✅ ENHANCED: Update prospect with address components
     const updateFields = []
     const updateValues = []
     let paramCount = 0
 
+    // ✅ NEW: Enhanced allowed fields including address components
+    const allowedFields = [
+      "business_name",
+      "contact_name",
+      "contact_email",
+      "phone",
+      "formatted_address",
+      // ✅ NEW: Address component fields
+      "street_address",
+      "city", 
+      "state",
+      "zip_code",
+      "country",
+      "website",
+      "business_type",
+      "estimated_value",
+      "priority",
+      "status",
+      "notes"
+    ]
+
     for (const [key, value] of Object.entries(otherFields)) {
-      if (value !== undefined) {
+      if (allowedFields.includes(key) && value !== undefined) {
         paramCount++
         updateFields.push(`${key} = $${paramCount}`)
         updateValues.push(value)
@@ -376,10 +391,23 @@ export async function PUT(request: NextRequest) {
       severityLevel: isOwnershipChange ? "warning" : "info",
     })
 
+    console.log("✅ Prospect updated with address components:", {
+      prospect_id: id,
+      updated_fields: updateFields.length,
+      address_components: {
+        street_address: result.rows[0].street_address,
+        city: result.rows[0].city,
+        state: result.rows[0].state,
+        zip_code: result.rows[0].zip_code,
+        country: result.rows[0].country
+      }
+    })
+
     return NextResponse.json({
       success: true,
       data: result.rows[0],
       message: isOwnershipChange ? "Prospect ownership changed successfully" : "Prospect updated successfully",
+      address_components_updated: true,
     })
   } catch (error: unknown) {
     await client.query("ROLLBACK")

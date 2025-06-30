@@ -2,13 +2,15 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Plus, Users, Target, TrendingUp, DollarSign, Grid, List, Edit } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus, Users, Target, TrendingUp, DollarSign, Grid, List, Edit, Search, SortAsc, SortDesc, X, Filter } from "lucide-react"
 import { ProspectModal } from "@/components/prospect-modal"
 import { ConversionModal } from "@/components/conversion-modal"
 import { useAuth } from "@/app/providers"
@@ -34,8 +36,13 @@ export default function SalesPage() {
   const [canViewAll, setCanViewAll] = useState(false)
   const [editProspect, setEditProspect] = useState<any>(null)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [sortField, setSortField] = useState<string>("")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+  
+  // ✅ NEW: Search and Sort States
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortField, setSortField] = useState<string>("created_at")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [priorityFilter, setPriorityFilter] = useState<string>("all")
 
   useEffect(() => {
     loadData()
@@ -127,28 +134,92 @@ export default function SalesPage() {
     }
   }
 
-  const sortedProspects = [...prospects].sort((a: any, b: any) => {
-    if (!sortField) return 0
+  // ✅ NEW: Enhanced filtering and sorting with useMemo for performance
+  const filteredAndSortedProspects = useMemo(() => {
+    let filtered = [...prospects]
 
-    let aValue: string | number = a[sortField]
-    let bValue: string | number = b[sortField]
-
-    // Handle different data types
-    if (sortField === "estimated_value") {
-      aValue = Number(aValue) || 0
-      bValue = Number(bValue) || 0
-    } else if (sortField === "created_at") {
-      aValue = new Date(aValue).getTime()
-      bValue = new Date(bValue).getTime()
-    } else {
-      aValue = String(aValue || "").toLowerCase()
-      bValue = String(bValue || "").toLowerCase()
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter((prospect: any) => {
+        const searchableFields = [
+          prospect.business_name,
+          prospect.contact_name,
+          prospect.contact_email,
+          prospect.phone,
+          prospect.formatted_address,
+          prospect.street_address,
+          prospect.city,
+          prospect.state,
+          prospect.zip_code,
+          prospect.website,
+          prospect.notes,
+          prospect.assigned_salesperson_name,
+          prospect.business_type,
+        ]
+        
+        return searchableFields.some(field => 
+          field && field.toString().toLowerCase().includes(query)
+        )
+      })
     }
 
-    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1
-    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1
-    return 0
-  })
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((prospect: any) => prospect.status === statusFilter)
+    }
+
+    // Apply priority filter
+    if (priorityFilter !== "all") {
+      filtered = filtered.filter((prospect: any) => prospect.priority === priorityFilter)
+    }
+
+    // Apply sorting
+    if (sortField) {
+      filtered.sort((a: any, b: any) => {
+        let aValue: string | number = a[sortField]
+        let bValue: string | number = b[sortField]
+
+        // Handle different data types
+        if (sortField === "estimated_value") {
+          aValue = Number(aValue) || 0
+          bValue = Number(bValue) || 0
+        } else if (sortField === "created_at") {
+          aValue = new Date(aValue).getTime()
+          bValue = new Date(bValue).getTime()
+        } else {
+          aValue = String(aValue || "").toLowerCase()
+          bValue = String(bValue || "").toLowerCase()
+        }
+
+        if (aValue < bValue) return sortDirection === "asc" ? -1 : 1
+        if (aValue > bValue) return sortDirection === "asc" ? 1 : -1
+        return 0
+      })
+    }
+
+    return filtered
+  }, [prospects, searchQuery, statusFilter, priorityFilter, sortField, sortDirection])
+
+  // ✅ NEW: Clear all filters
+  const clearFilters = () => {
+    setSearchQuery("")
+    setStatusFilter("all")
+    setPriorityFilter("all")
+    setSortField("created_at")
+    setSortDirection("desc")
+  }
+
+  // ✅ NEW: Get unique values for filter dropdowns
+  const uniqueStatuses = useMemo(() => {
+    const statuses = new Set(prospects.map((p: any) => p.status))
+    return Array.from(statuses).sort()
+  }, [prospects])
+
+  const uniquePriorities = useMemo(() => {
+    const priorities = new Set(prospects.map((p: any) => p.priority))
+    return Array.from(priorities).sort()
+  }, [prospects])
 
   if (loading) {
     return (
@@ -172,7 +243,11 @@ export default function SalesPage() {
     >
       <div className="flex items-center gap-1">
         {children}
-        {sortField === field && <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>}
+        {sortField === field && (
+          sortDirection === "asc" ? 
+            <SortAsc className="h-3 w-3" /> : 
+            <SortDesc className="h-3 w-3" />
+        )}
       </div>
     </th>
   )
@@ -193,7 +268,7 @@ export default function SalesPage() {
           </tr>
         </thead>
         <tbody>
-          {sortedProspects.map((prospect: any) => (
+          {filteredAndSortedProspects.map((prospect: any) => (
             <tr key={prospect.id} className="hover:bg-gray-50">
               <td className="border border-gray-200 px-4 py-2">
                 <div className="font-medium">{prospect.business_name}</div>
@@ -250,7 +325,7 @@ export default function SalesPage() {
 
   const renderCardView = () => (
     <div className="space-y-4">
-      {sortedProspects.map((prospect: any) => (
+      {filteredAndSortedProspects.map((prospect: any) => (
         <div key={prospect.id} className="border rounded-lg p-4 hover:bg-gray-50">
           <div className="flex justify-between items-start">
             <div className="flex-1">
@@ -358,6 +433,8 @@ export default function SalesPage() {
           <CardContent>
             <div className="text-2xl font-bold">{prospects.length}</div>
             <p className="text-xs text-muted-foreground">
+              {filteredAndSortedProspects.length !== prospects.length && 
+                `${filteredAndSortedProspects.length} filtered • `}
               {viewAll ? "All prospects in system" : "Your prospects in pipeline"}
             </p>
           </CardContent>
@@ -417,6 +494,110 @@ export default function SalesPage() {
               />
             )}
           </div>
+
+          {/* ✅ NEW: Search and Filter Controls */}
+          {prospects.length > 0 && (
+            <div className="space-y-4 pt-4">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search by business name, contact, address, notes..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Filter and Sort Controls */}
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Sort By */}
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium">Sort by:</Label>
+                  <Select value={sortField} onValueChange={setSortField}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="business_name">Business Name</SelectItem>
+                      <SelectItem value="contact_name">Contact Name</SelectItem>
+                      <SelectItem value="created_at">Created Date</SelectItem>
+                      <SelectItem value="estimated_value">Value</SelectItem>
+                      <SelectItem value="status">Status</SelectItem>
+                      <SelectItem value="priority">Priority</SelectItem>
+                      <SelectItem value="assigned_salesperson_name">Salesperson</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+                  >
+                    {sortDirection === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+                  </Button>
+                </div>
+
+                {/* Status Filter */}
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium">Status:</Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      {uniqueStatuses.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Priority Filter */}
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium">Priority:</Label>
+                  <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Priority</SelectItem>
+                      {uniquePriorities.map((priority) => (
+                        <SelectItem key={priority} value={priority}>
+                          {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Clear Filters */}
+                {(searchQuery || statusFilter !== "all" || priorityFilter !== "all") && (
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    <X className="h-3 w-3 mr-1" />
+                    Clear Filters
+                  </Button>
+                )}
+
+                {/* Results Counter */}
+                <div className="text-sm text-gray-600 ml-auto">
+                  Showing {filteredAndSortedProspects.length} of {prospects.length} prospects
+                </div>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {prospects.length === 0 ? (
@@ -424,6 +605,15 @@ export default function SalesPage() {
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No prospects yet</h3>
               <p className="text-gray-600 mb-4">Start building your sales pipeline by adding your first prospect.</p>
+            </div>
+          ) : filteredAndSortedProspects.length === 0 ? (
+            <div className="text-center py-12">
+              <Filter className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No prospects match your filters</h3>
+              <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria.</p>
+              <Button variant="outline" onClick={clearFilters}>
+                Clear All Filters
+              </Button>
             </div>
           ) : (
             <>{viewMode === "cards" ? renderCardView() : renderTableView()}</>

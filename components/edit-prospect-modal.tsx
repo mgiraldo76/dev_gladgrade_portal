@@ -1,3 +1,5 @@
+// components/edit-prospect-modal.tsx - Enhanced with assignment dropdown AND activity log
+
 "use client"
 
 import type React from "react"
@@ -18,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Phone, Mail, MapPin, Globe, DollarSign, User, Building } from "lucide-react"
+import { Calendar, Phone, Mail, MapPin, Globe, DollarSign, User, Building, Users, Shield, AlertTriangle, Crown, Star } from "lucide-react"
 import { useAuth } from "@/app/providers"
 
 interface EditProspectModalProps {
@@ -29,19 +31,173 @@ interface EditProspectModalProps {
   userRole: string
 }
 
+interface SalesEmployee {
+  id: number
+  full_name: string
+  email: string
+  legacy_role: string
+  primary_role_name?: string
+  position_title?: string
+  position_level?: number
+  department_name: string
+  has_sales_access: boolean
+  primary_is_sales: boolean
+  status: string
+}
+
+// US States dropdown data
+const US_STATES = [
+  { value: "AL", label: "Alabama" },
+  { value: "AK", label: "Alaska" },
+  { value: "AZ", label: "Arizona" },
+  { value: "AR", label: "Arkansas" },
+  { value: "CA", label: "California" },
+  { value: "CO", label: "Colorado" },
+  { value: "CT", label: "Connecticut" },
+  { value: "DE", label: "Delaware" },
+  { value: "FL", label: "Florida" },
+  { value: "GA", label: "Georgia" },
+  { value: "HI", label: "Hawaii" },
+  { value: "ID", label: "Idaho" },
+  { value: "IL", label: "Illinois" },
+  { value: "IN", label: "Indiana" },
+  { value: "IA", label: "Iowa" },
+  { value: "KS", label: "Kansas" },
+  { value: "KY", label: "Kentucky" },
+  { value: "LA", label: "Louisiana" },
+  { value: "ME", label: "Maine" },
+  { value: "MD", label: "Maryland" },
+  { value: "MA", label: "Massachusetts" },
+  { value: "MI", label: "Michigan" },
+  { value: "MN", label: "Minnesota" },
+  { value: "MS", label: "Mississippi" },
+  { value: "MO", label: "Missouri" },
+  { value: "MT", label: "Montana" },
+  { value: "NE", label: "Nebraska" },
+  { value: "NV", label: "Nevada" },
+  { value: "NH", label: "New Hampshire" },
+  { value: "NJ", label: "New Jersey" },
+  { value: "NM", label: "New Mexico" },
+  { value: "NY", label: "New York" },
+  { value: "NC", label: "North Carolina" },
+  { value: "ND", label: "North Dakota" },
+  { value: "OH", label: "Ohio" },
+  { value: "OK", label: "Oklahoma" },
+  { value: "OR", label: "Oregon" },
+  { value: "PA", label: "Pennsylvania" },
+  { value: "RI", label: "Rhode Island" },
+  { value: "SC", label: "South Carolina" },
+  { value: "SD", label: "South Dakota" },
+  { value: "TN", label: "Tennessee" },
+  { value: "TX", label: "Texas" },
+  { value: "UT", label: "Utah" },
+  { value: "VT", label: "Vermont" },
+  { value: "VA", label: "Virginia" },
+  { value: "WA", label: "Washington" },
+  { value: "WV", label: "West Virginia" },
+  { value: "WI", label: "Wisconsin" },
+  { value: "WY", label: "Wyoming" },
+  { value: "DC", label: "District of Columbia" }
+]
+
+// Postal code validation function
+function formatPostalCode(code: string, country: string): string {
+  const cleaned = code.replace(/[^A-Za-z0-9]/g, "")
+  
+  switch (country) {
+    case "US":
+      if (cleaned.length === 5) return cleaned
+      if (cleaned.length === 9) return `${cleaned.slice(0, 5)}-${cleaned.slice(5)}`
+      return code
+    case "CA":
+      if (cleaned.length === 6) {
+        return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`.toUpperCase()
+      }
+      return code.toUpperCase()
+    case "MX":
+      if (cleaned.length === 5) return cleaned
+      return code
+    case "ES":
+    case "IT":
+      if (cleaned.length === 5) return cleaned
+      return code
+    default:
+      return code
+  }
+}
+
+// Helper function to get employee priority for sorting
+function getEmployeePriority(employee: SalesEmployee, currentUserId?: number): number {
+  // Current user (record owner) = highest priority
+  if (employee.id === currentUserId) return 1
+  
+  // CEO = 2nd priority
+  if (employee.position_title === "CEO") return 2
+  
+  // CCO = 3rd priority  
+  if (employee.position_title === "CCO") return 3
+  
+  // Sales Manager = 4th priority
+  if (employee.position_title === "Sales Manager" || employee.legacy_role === "sales_manager") return 4
+  
+  // Other sales roles = 5th priority
+  if (employee.has_sales_access || employee.primary_is_sales) return 5
+  
+  // Everyone else = lowest priority
+  return 6
+}
+
+// Helper function to get display icon for employee
+function getEmployeeIcon(employee: SalesEmployee, currentUserId?: number) {
+  if (employee.id === currentUserId) return <Star className="h-3 w-3 text-yellow-500" />
+  if (employee.position_title === "CEO") return <Crown className="h-3 w-3 text-purple-500" />
+  if (employee.position_title === "CCO") return <Shield className="h-3 w-3 text-blue-500" />
+  if (employee.position_title === "Sales Manager" || employee.legacy_role === "sales_manager") return <Users className="h-3 w-3 text-green-500" />
+  return <User className="h-3 w-3 text-gray-500" />
+}
+
+// Helper function to get activity type icon
+function getActivityIcon(activityType: string) {
+  switch (activityType) {
+    case "call":
+      return <Phone className="h-4 w-4 text-green-500" />
+    case "email":
+      return <Mail className="h-4 w-4 text-blue-500" />
+    case "meeting":
+      return <Calendar className="h-4 w-4 text-purple-500" />
+    case "proposal":
+      return <DollarSign className="h-4 w-4 text-orange-500" />
+    case "follow_up":
+      return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+    default:
+      return <User className="h-4 w-4 text-gray-500" />
+  }
+}
+
 export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRole }: EditProspectModalProps) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [activities, setActivities] = useState([])
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [businessSectors, setBusinessSectors] = useState([])
+  const [salesEmployees, setSalesEmployees] = useState<SalesEmployee[]>([])
+  const [loadingSalesEmployees, setLoadingSalesEmployees] = useState(false)
+  const [changeReason, setChangeReason] = useState("")
+  const [showChangeReason, setShowChangeReason] = useState(false)
 
+  // Enhanced form data with address components
   const [formData, setFormData] = useState({
     business_name: "",
     contact_name: "",
     contact_email: "",
     phone: "",
-    formatted_address: "",
+    // Individual address fields
+    street_address: "",
+    city: "",
+    state: "",
+    zip_code: "",
+    country: "US",
+    formatted_address: "", // Keep for compatibility
     website: "",
     business_type: "",
     estimated_value: "",
@@ -51,13 +207,17 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
     assigned_salesperson_id: "",
   })
 
+  // Activity form state
   const [newActivity, setNewActivity] = useState({
     activity_type: "call",
     subject: "",
     description: "",
   })
 
-  // Initialize form data when prospect changes
+  // Check if current user can reassign prospects
+  const canReassignProspects = ["super_admin", "sales_manager"].includes(userRole)
+
+  // Initialize form data with address components
   useEffect(() => {
     if (prospect) {
       console.log("🔍 Loading prospect data:", prospect)
@@ -66,6 +226,12 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
         contact_name: prospect.contact_name || "",
         contact_email: prospect.contact_email || "",
         phone: prospect.phone || "",
+        // Load address components
+        street_address: prospect.street_address || "",
+        city: prospect.city || "",
+        state: prospect.state || "",
+        zip_code: prospect.zip_code || "",
+        country: prospect.country || "US",
         formatted_address: prospect.formatted_address || "",
         website: prospect.website || "",
         business_type: prospect.business_type || "",
@@ -77,6 +243,7 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
       })
       loadActivities()
       loadBusinessSectors()
+      loadSalesEmployees()
     }
   }, [prospect])
 
@@ -92,6 +259,86 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
     }
   }
 
+  const loadSalesEmployees = async () => {
+    setLoadingSalesEmployees(true)
+    try {
+      const headers: Record<string, string> = {}
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      // Use enhanced employees endpoint and filter for sales access
+      const response = await fetch("/api/employees/enhanced", { headers })
+      if (response.ok) {
+        const data = await response.json()
+        console.log("🔍 Raw employee data:", data.data)
+        
+        // Filter for employees with sales access using multiple criteria
+        const salesAccessEmployees = (data.data || []).filter((emp: SalesEmployee) => {
+          // Only show active employees
+          const isActive = emp.status === "active"
+          
+          if (!isActive) {
+            console.log(`❌ Skipping inactive employee: ${emp.full_name} (status: ${emp.status})`)
+            return false
+          }
+          
+          // Check enhanced role system
+          const hasEnhancedSalesAccess = emp.has_sales_access || emp.primary_is_sales || emp.position_title === "CEO"
+          
+          // Check legacy role system
+          const hasLegacySalesAccess = ["super_admin", "admin", "sales_manager", "sales", "employee"].includes(emp.legacy_role)
+          
+          // Check department
+          const isInSalesDept = emp.department_name?.toLowerCase().includes("sales")
+          
+          // Check position title
+          const hasSalesPosition = emp.position_title && ["CEO", "CCO", "Sales Manager", "Sales Director", "Sales Representative", "Account Manager"].includes(emp.position_title)
+          
+          console.log(`🔍 Employee ${emp.full_name}:`, {
+            isActive,
+            hasEnhancedSalesAccess,
+            hasLegacySalesAccess, 
+            isInSalesDept,
+            hasSalesPosition,
+            legacy_role: emp.legacy_role,
+            position_title: emp.position_title,
+            department_name: emp.department_name,
+            status: emp.status
+          })
+          
+          // Include if active AND any sales criteria matches
+          return isActive && (hasEnhancedSalesAccess || hasLegacySalesAccess || isInSalesDept || hasSalesPosition)
+        })
+        
+        console.log("🔍 Filtered sales employees:", salesAccessEmployees.length)
+        
+        // Sort by priority: Current user, CEO, CCO, Sales Manager, then others
+        const sortedEmployees = salesAccessEmployees.sort((a: SalesEmployee, b: SalesEmployee) => {
+          const priorityA = getEmployeePriority(a, prospect?.assigned_salesperson_id)
+          const priorityB = getEmployeePriority(b, prospect?.assigned_salesperson_id)
+          
+          if (priorityA !== priorityB) {
+            return priorityA - priorityB
+          }
+          
+          // Secondary sort by name
+          return a.full_name.localeCompare(b.full_name)
+        })
+        
+        setSalesEmployees(sortedEmployees)
+        console.log("✅ Loaded and sorted sales employees:", sortedEmployees.length, sortedEmployees)
+      } else {
+        console.error("Failed to load sales employees:", response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error("Error loading sales employees:", error)
+    } finally {
+      setLoadingSalesEmployees(false)
+    }
+  }
+
+  // ✅ RESTORED: Load activities function
   const loadActivities = async () => {
     if (!prospect?.id) return
 
@@ -114,55 +361,7 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
     }
   }
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-
-    try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      // Add authentication headers
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      console.log("🔍 Submitting with headers:", headers)
-      console.log("🔍 Form data:", formData)
-
-      const response = await fetch("/api/sales/prospects", {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({
-          id: prospect.id,
-          ...formData,
-          estimated_value: Number.parseFloat(formData.estimated_value) || 0,
-          assigned_salesperson_id:
-            Number.parseInt(formData.assigned_salesperson_id) || prospect.assigned_salesperson_id,
-        }),
-      })
-
-      if (response.ok) {
-        onSuccess()
-        onClose()
-      } else {
-        const errorData = await response.json()
-        console.error("Failed to update prospect:", errorData)
-        alert(`Failed to update prospect: ${errorData.error}`)
-      }
-    } catch (error) {
-      console.error("Error updating prospect:", error)
-      alert("Error updating prospect")
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // ✅ RESTORED: Add activity function
   const handleAddActivity = async () => {
     if (!newActivity.subject.trim()) {
       alert("Please enter a subject for the activity")
@@ -205,29 +404,84 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
     }
   }
 
-  const getStatusColor = (status: string) => {
-    const colors = {
-      new: "bg-blue-100 text-blue-800",
-      contacted: "bg-yellow-100 text-yellow-800",
-      qualified: "bg-green-100 text-green-800",
-      proposal: "bg-purple-100 text-purple-800",
-      negotiation: "bg-orange-100 text-orange-800",
-      converted: "bg-green-100 text-green-800",
-      client: "bg-green-100 text-green-800",
-      sold: "bg-green-100 text-green-800",
-      lost: "bg-red-100 text-red-800",
-    }
-    return colors[status as keyof typeof colors] || "bg-gray-100 text-gray-800"
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const getPriorityColor = (priority: string) => {
-    const colors = {
-      low: "bg-gray-100 text-gray-800",
-      medium: "bg-blue-100 text-blue-800",
-      high: "bg-orange-100 text-orange-800",
-      urgent: "bg-red-100 text-red-800",
+  const handleZipChange = (value: string) => {
+    const formatted = formatPostalCode(value, formData.country)
+    setFormData((prev) => ({ ...prev, zip_code: formatted }))
+  }
+
+  const handleAssignmentChange = (newAssignmentId: string) => {
+    const isOwnershipChange = newAssignmentId !== prospect.assigned_salesperson_id?.toString()
+    
+    if (isOwnershipChange && canReassignProspects) {
+      setShowChangeReason(true)
     }
-    return colors[priority as keyof typeof colors] || "bg-gray-100 text-gray-800"
+    
+    setFormData((prev) => ({ ...prev, assigned_salesperson_id: newAssignmentId }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      console.log("🔍 Submitting prospect update with headers:", headers)
+      console.log("🔍 Form data:", formData)
+
+      // Format postal code and build complete address
+      const formattedZip = formatPostalCode(formData.zip_code, formData.country)
+      const fullAddress = `${formData.street_address}, ${formData.city}, ${formData.state} ${formattedZip}`.trim()
+
+      const isOwnershipChange = formData.assigned_salesperson_id !== prospect.assigned_salesperson_id?.toString()
+
+      const requestBody: any = {
+        id: prospect.id,
+        ...formData,
+        zip_code: formattedZip,
+        formatted_address: formData.formatted_address || fullAddress,
+        estimated_value: Number.parseFloat(formData.estimated_value) || 0,
+        assigned_salesperson_id: Number.parseInt(formData.assigned_salesperson_id) || prospect.assigned_salesperson_id,
+      }
+
+      // Add change reason if ownership is changing
+      if (isOwnershipChange && canReassignProspects) {
+        requestBody.change_reason = changeReason || "Prospect reassignment via edit modal"
+      }
+
+      const response = await fetch("/api/sales/prospects", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(requestBody),
+      })
+
+      if (response.ok) {
+        onSuccess()
+        onClose()
+        // Reset change reason state
+        setChangeReason("")
+        setShowChangeReason(false)
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Failed to update prospect:", errorData)
+        alert(`Failed to update prospect: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error("❌ Error updating prospect:", error)
+      alert("Error updating prospect")
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (!prospect) return null
@@ -239,116 +493,16 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
           <DialogTitle className="flex items-center gap-3">
             <Building className="h-5 w-5" />
             {prospect.business_name}
-            <Badge className={getStatusColor(prospect.status)}>{prospect.status}</Badge>
-            <Badge className={getPriorityColor(prospect.priority)}>{prospect.priority}</Badge>
+            <Badge className="bg-blue-100 text-blue-800">{prospect.status}</Badge>
           </DialogTitle>
-          <DialogDescription>Edit prospect information and track communications</DialogDescription>
+          <DialogDescription>Edit prospect information and manage sales activities</DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="activities">Activities ({activities.length})</TabsTrigger>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Business Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Building className="h-4 w-4 text-gray-500" />
-                    <span className="font-medium">{prospect.business_name}</span>
-                  </div>
-                  {prospect.business_type && (
-                    <div className="text-sm text-gray-600">Industry: {prospect.business_type}</div>
-                  )}
-                  {prospect.formatted_address && (
-                    <div className="flex items-start gap-2">
-                      <MapPin className="h-4 w-4 text-gray-500 mt-0.5" />
-                      <span className="text-sm">{prospect.formatted_address}</span>
-                    </div>
-                  )}
-                  {prospect.website && (
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-gray-500" />
-                      <a
-                        href={prospect.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:underline"
-                      >
-                        {prospect.website}
-                      </a>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Contact Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {prospect.contact_name && (
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-500" />
-                      <span className="font-medium">{prospect.contact_name}</span>
-                    </div>
-                  )}
-                  {prospect.contact_email && (
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-gray-500" />
-                      <a href={`mailto:${prospect.contact_email}`} className="text-sm text-blue-600 hover:underline">
-                        {prospect.contact_email}
-                      </a>
-                    </div>
-                  )}
-                  {prospect.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-gray-500" />
-                      <a href={`tel:${prospect.phone}`} className="text-sm text-blue-600 hover:underline">
-                        {prospect.phone}
-                      </a>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Sales Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {prospect.estimated_value > 0 && (
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
-                      <span className="font-medium text-green-600">
-                        ${Number(prospect.estimated_value).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                  <div className="text-sm text-gray-600">Assigned to: {prospect.assigned_salesperson_name}</div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm">Created: {new Date(prospect.created_at).toLocaleDateString()}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Notes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-gray-600">{prospect.notes || "No notes available"}</p>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
 
           <TabsContent value="details" className="space-y-4">
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -392,13 +546,155 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="formatted_address">Address</Label>
-                <Input
-                  id="formatted_address"
-                  value={formData.formatted_address}
-                  onChange={(e) => handleInputChange("formatted_address", e.target.value)}
-                />
+              {/* Assignment Dropdown */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="font-medium flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Assignment & Ownership
+                </h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="assigned_salesperson_id">
+                    Assigned Sales Representative *
+                    {!canReassignProspects && (
+                      <Badge variant="outline" className="ml-2 text-xs">
+                        <Shield className="h-3 w-3 mr-1" />
+                        Read Only
+                      </Badge>
+                    )}
+                  </Label>
+                  <Select
+                    value={formData.assigned_salesperson_id}
+                    onValueChange={handleAssignmentChange}
+                    disabled={!canReassignProspects || loadingSalesEmployees}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingSalesEmployees ? "Loading employees..." : "Select sales representative"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {salesEmployees.map((employee) => {
+                        const isCurrentOwner = employee.id === prospect.assigned_salesperson_id
+                        
+                        return (
+                          <SelectItem key={employee.id} value={employee.id.toString()}>
+                            <div className="flex items-center gap-2 w-full">
+                              {getEmployeeIcon(employee, prospect.assigned_salesperson_id)}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{employee.full_name}</span>
+                                  {isCurrentOwner && (
+                                    <Badge variant="outline" className="text-xs">Current Owner</Badge>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {employee.position_title || employee.primary_role_name || employee.legacy_role} 
+                                  {employee.department_name && ` • ${employee.department_name}`}
+                                </div>
+                              </div>
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                  
+                  {!canReassignProspects && (
+                    <p className="text-sm text-gray-600">
+                      <AlertTriangle className="h-3 w-3 inline mr-1" />
+                      Only Sales Managers and Super Admins can reassign prospects to other team members.
+                    </p>
+                  )}
+                </div>
+
+                {/* Change Reason Input (shown when ownership is changing) */}
+                {showChangeReason && (
+                  <div className="space-y-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <Label htmlFor="change_reason">Reason for Assignment Change</Label>
+                    <Textarea
+                      id="change_reason"
+                      value={changeReason}
+                      onChange={(e) => setChangeReason(e.target.value)}
+                      placeholder="Please provide a reason for changing the prospect assignment..."
+                      rows={2}
+                    />
+                    <p className="text-xs text-yellow-700">
+                      This change will be logged in the audit system for compliance tracking.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Address Components */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="font-medium">Address Information</h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="street_address">Street Address</Label>
+                  <Input
+                    id="street_address"
+                    value={formData.street_address}
+                    onChange={(e) => handleInputChange("street_address", e.target.value)}
+                    placeholder="123 Main Street"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => handleInputChange("city", e.target.value)}
+                      placeholder="Miami"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
+                    <Select
+                      value={formData.state}
+                      onValueChange={(value) => handleInputChange("state", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select state" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {US_STATES.map((state) => (
+                          <SelectItem key={state.value} value={state.value}>
+                            {state.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="zip_code">ZIP Code</Label>
+                    <Input
+                      id="zip_code"
+                      value={formData.zip_code}
+                      onChange={(e) => handleZipChange(e.target.value)}
+                      placeholder="33101 or 33101-1234"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="country">Country</Label>
+                  <Select
+                    value={formData.country}
+                    onValueChange={(value) => handleInputChange("country", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="US">United States</SelectItem>
+                      <SelectItem value="CA">Canada</SelectItem>
+                      <SelectItem value="MX">Mexico</SelectItem>
+                      <SelectItem value="ES">Spain</SelectItem>
+                      <SelectItem value="IT">Italy</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -468,8 +764,6 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                       <SelectItem value="proposal">Proposal</SelectItem>
                       <SelectItem value="negotiation">Negotiation</SelectItem>
                       <SelectItem value="converted">Converted</SelectItem>
-                      <SelectItem value="client">Client</SelectItem>
-                      <SelectItem value="sold">Sold</SelectItem>
                       <SelectItem value="lost">Lost</SelectItem>
                     </SelectContent>
                   </Select>
@@ -497,11 +791,15 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
             </form>
           </TabsContent>
 
+          {/* ✅ RESTORED: Activities Tab with Full Functionality */}
           <TabsContent value="activities" className="space-y-4">
             {/* Add New Activity */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Add New Activity</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Add New Activity
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
@@ -515,21 +813,47 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="call">Phone Call</SelectItem>
-                        <SelectItem value="email">Email</SelectItem>
-                        <SelectItem value="meeting">Meeting</SelectItem>
-                        <SelectItem value="note">Note</SelectItem>
-                        <SelectItem value="follow_up">Follow Up</SelectItem>
+                        <SelectItem value="call">
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-green-500" />
+                            Phone Call
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="email">
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-blue-500" />
+                            Email
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="meeting">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-purple-500" />
+                            Meeting
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="note">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-500" />
+                            Note
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="follow_up">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                            Follow Up
+                          </div>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="subject">Subject</Label>
+                    <Label htmlFor="subject">Subject *</Label>
                     <Input
                       id="subject"
                       value={newActivity.subject}
                       onChange={(e) => setNewActivity((prev) => ({ ...prev, subject: e.target.value }))}
                       placeholder="Brief description of activity"
+                      required
                     />
                   </div>
                 </div>
@@ -539,11 +863,16 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                     id="description"
                     value={newActivity.description}
                     onChange={(e) => setNewActivity((prev) => ({ ...prev, description: e.target.value }))}
-                    rows={2}
-                    placeholder="Detailed notes about the activity"
+                    rows={3}
+                    placeholder="Detailed notes about the activity, outcome, next steps..."
                   />
                 </div>
-                <Button onClick={handleAddActivity} disabled={!newActivity.subject.trim()}>
+                <Button 
+                  onClick={handleAddActivity} 
+                  disabled={!newActivity.subject.trim()}
+                  className="w-full"
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
                   Add Activity
                 </Button>
               </CardContent>
@@ -552,31 +881,59 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
             {/* Activities List */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Activity History</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Building className="h-4 w-4" />
+                  Activity History ({activities.length})
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingActivities ? (
-                  <div className="text-center py-4">Loading activities...</div>
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                    <p className="text-gray-600 mt-2">Loading activities...</p>
+                  </div>
                 ) : activities.length === 0 ? (
-                  <div className="text-center py-4 text-gray-500">No activities recorded yet</div>
+                  <div className="text-center py-8 text-gray-500">
+                    <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p className="font-medium">No activities recorded yet</p>
+                    <p className="text-sm">Start by adding an activity above to track your sales interactions.</p>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {activities.map((activity: any) => (
-                      <div key={activity.id} className="border-l-4 border-blue-200 pl-4 py-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-medium text-sm">{activity.subject}</div>
-                            <div className="text-xs text-gray-500">
-                              {activity.activity_type} • {activity.employee_name} •{" "}
-                              {new Date(activity.completed_at || activity.created_at).toLocaleString()}
+                      <div key={activity.id} className="border-l-4 border-blue-200 pl-4 py-3 bg-gray-50 rounded-r-lg">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2">
+                            {getActivityIcon(activity.activity_type)}
+                            <div>
+                              <div className="font-medium text-sm">{activity.subject}</div>
+                              <div className="text-xs text-gray-500 flex items-center gap-2">
+                                <User className="h-3 w-3" />
+                                {activity.employee_name} 
+                                <span>•</span>
+                                <Calendar className="h-3 w-3" />
+                                {new Date(activity.completed_at || activity.created_at).toLocaleString()}
+                              </div>
                             </div>
                           </div>
-                          <Badge variant="outline" className="text-xs">
-                            {activity.activity_type}
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {activity.activity_type.replace('_', ' ')}
                           </Badge>
                         </div>
                         {activity.description && (
-                          <div className="text-sm text-gray-600 mt-1">{activity.description}</div>
+                          <div className="text-sm text-gray-700 mt-2 pl-6">
+                            {activity.description}
+                          </div>
+                        )}
+                        {activity.outcome && (
+                          <div className="text-xs text-gray-500 mt-1 pl-6">
+                            <strong>Outcome:</strong> {activity.outcome}
+                          </div>
+                        )}
+                        {activity.next_action && (
+                          <div className="text-xs text-blue-600 mt-1 pl-6">
+                            <strong>Next Action:</strong> {activity.next_action}
+                          </div>
                         )}
                       </div>
                     ))}

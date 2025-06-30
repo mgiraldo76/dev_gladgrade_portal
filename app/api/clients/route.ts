@@ -31,7 +31,7 @@ export async function GET() {
     const result = await query(`
       SELECT
         bc.id,
-        bc.business_name as businessname,
+        bc.business_name as business_name,
         bc.contact_name,
         bc.contact_email,
         bc.phone,
