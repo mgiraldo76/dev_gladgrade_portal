@@ -22,41 +22,51 @@ import {
 } from "lucide-react"
 import { useState, useEffect } from "react"
 
-
 export function Sidebar() {
   const pathname = usePathname()
-  const { role, user } = useAuth() // Add user here
+  const { role, user } = useAuth()
   const [hasClientAccess, setHasClientAccess] = useState(false)
 
-  // Check client access for any logged-in user
+  // Check client access for GladGrade employees
   useEffect(() => {
-    const checkAccess = async () => {
+    const checkClientAccess = async () => {
       // Super admin and admin always have client access
-      if (role === "super_admin" || role === "admin" || role === "employee") {
+      if (role === "super_admin" || role === "admin") {
         setHasClientAccess(true)
         return
       }
       
-      // For other users, check database
-      if (user?.uid || user?.email) {
+      // Check for employees
+      if (role === "employee" && user?.email) {
         try {
           const response = await fetch("/api/user-access", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
-              userId: user.uid, // Try ID first
-              email: user.email // Fallback to email
+              email: user.email  // Only send email, not Firebase UID
             })
           })
-          const data = await response.json()
-          setHasClientAccess(data.hasClientAccess)
           
-          // Optional: Log for debugging
-          console.log("Client access check:", {
-            isEmployee: data.isEmployee,
-            hasAccess: data.hasClientAccess,
-            userInfo: data.userInfo
-          })
+          if (response.ok) {
+            const data = await response.json()
+            setHasClientAccess(data.hasClientAccess || false)
+            
+            console.log("Client access check:", {
+              isEmployee: data.isEmployee,
+              hasAccess: data.hasClientAccess,
+              userInfo: data.userInfo
+            })
+          } else {
+            // Fallback: check employee record directly
+            const employeeResponse = await fetch(`/api/employees/check-access?email=${encodeURIComponent(user.email)}`)
+            if (employeeResponse.ok) {
+              const employeeData = await employeeResponse.json()
+              // Check if user is in Sales department or has leadership role
+              const hasSalesAccess = employeeData.department_name === "Sales" || 
+                                   ["CEO", "CCO", "Sales Manager", "Sales Director", "Sales Representative"].includes(employeeData.position_title)
+              setHasClientAccess(hasSalesAccess)
+            }
+          }
         } catch (error) {
           console.error("Access check failed:", error)
           setHasClientAccess(false)
@@ -66,47 +76,10 @@ export function Sidebar() {
       }
     }
     
-    checkAccess()
-  }, [role, user?.uid, user?.email])
-
-  // Function to check if user has client access based on enhanced access control
-  const checkClientAccess = async () => {
-    try {
-      // Check if user is a GladGrade employee
-      const isEmployee = user?.email?.endsWith("@gladgrade.com") || false
-      
-      if (!isEmployee) {
-        setHasClientAccess(false)
-        return
-      }
-
-      // For GladGrade employees, check department and role
-      const response = await fetch("/api/employees/enhanced")
-      if (response.ok) {
-        const data = await response.json()
-        const currentEmployee = data.data.find((emp: any) => emp.email === user?.email)
-        
-        if (currentEmployee) {
-          // Check access criteria:
-          // 1. Department = "Sales" OR
-          // 2. Role in ("CEO", "CCO", "Sales Manager")
-          const hasSalesDepartment = currentEmployee.department_name === "Sales"
-          const hasLeadershipRole = ["CEO", "CCO", "Sales Manager"].includes(currentEmployee.position_title)
-          
-          setHasClientAccess(hasSalesDepartment || hasLeadershipRole)
-        }
-      }
-    } catch (error) {
-      console.error("Error checking client access:", error)
-      setHasClientAccess(false)
-    }
-  }
-
-  useEffect(() => {
     if (user?.email) {
       checkClientAccess()
     }
-  }, [user?.email])
+  }, [role, user?.uid, user?.email])
 
   // Function to check if user has sales access
   const hasSalesAccess = () => {
@@ -144,13 +117,9 @@ export function Sidebar() {
       name: "Clients",
       href: "/dashboard/clients",
       icon: Building,
-      roles: ["super_admin", "admin", "employee"], // Updated to include employees
-      requiresClientAccess: true, // New flag for client access
+      roles: ["super_admin", "admin", "employee"], // Include employees
+      requiresClientAccess: true, // This is the key flag
     },
-
-
-
-
     {
       name: "Reports",
       href: "/dashboard/reports",
@@ -209,7 +178,7 @@ export function Sidebar() {
       return hasRoleAccess && hasSalesAccess()
     }
   
-    // Add this new check for client access
+    // Check for client access requirement
     if (item.requiresClientAccess) {
       // Super admin and admin always have access
       if (role === "super_admin" || role === "admin") {

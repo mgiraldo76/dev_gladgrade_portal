@@ -5,7 +5,10 @@ export async function POST(request: Request) {
   try {
     const { userId, email } = await request.json()
     
+    console.log("🔍 API CALLED - User access check:", { userId, email })
+    
     if (!userId && !email) {
+      console.log("❌ No userId or email provided")
       return NextResponse.json({ hasClientAccess: false })
     }
 
@@ -14,11 +17,13 @@ export async function POST(request: Request) {
     let param = userId
     
     if (!userId && email) {
-      whereClause = "WHERE e.email = $1"
-      param = email.toLowerCase()
+      whereClause = "WHERE LOWER(e.email) = LOWER($1)"
+      param = email
     }
 
-    const result = await query(`
+    console.log("🔍 Query parameters:", { whereClause, param })
+
+    const sqlQuery = `
       SELECT 
         e.id,
         e.email,
@@ -39,22 +44,43 @@ export async function POST(request: Request) {
       LEFT JOIN departments d ON e.department_id = d.id
       LEFT JOIN company_positions cp ON e.company_position_id = cp.id
       ${whereClause}
-    `, [param])
+    `
+
+    console.log("🔍 SQL Query:", sqlQuery)
+    console.log("🔍 SQL Parameters:", [param])
+
+    const result = await query(sqlQuery, [param])
+
+    console.log("📊 Database query result:", {
+      rowCount: result.rows.length,
+      rows: result.rows
+    })
 
     const userRecord = result.rows[0]
     const isEmployee = userRecord?.is_employee || false
     const hasAccess = isEmployee && (userRecord?.has_client_access || false)
 
-    return NextResponse.json({ 
+    console.log("✅ Final calculation:", { 
+      isEmployee, 
+      hasAccess, 
+      userRecord: userRecord || "NO RECORD FOUND"
+    })
+
+    const response = { 
       hasClientAccess: hasAccess,
       isEmployee: isEmployee,
       userInfo: userRecord || null
-    })
+    }
+
+    console.log("📤 API Response:", response)
+
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("Error checking user access:", error)
+    console.error("❌ ERROR in user access API:", error)
     return NextResponse.json({ 
       hasClientAccess: false,
-      isEmployee: false 
+      isEmployee: false,
+      error: error instanceof Error ? error.message : "Unknown error"
     })
   }
 }

@@ -1,12 +1,13 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
   "/page": "app/page.js",
-  "/api/clients/[id]/route": "app/api/clients/[id]/route.js",
-  "/api/clients/route": "app/api/clients/route.js",
-  "/api/clients/[id]/users/route": "app/api/clients/[id]/users/route.js",
+  "/api/sales/activities/route": "app/api/sales/activities/route.js",
+  "/api/sales/stats/route": "app/api/sales/stats/route.js",
+  "/api/sales/prospects/route": "app/api/sales/prospects/route.js",
   "/api/business-sectors/route": "app/api/business-sectors/route.js",
-  "/dashboard/system/page": "app/dashboard/system/page.js",
+  "/api/employees/enhanced/route": "app/api/employees/enhanced/route.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
+  "/dashboard/sales/page": "app/dashboard/sales/page.js",
+  "/dashboard/users/page": "app/dashboard/users/page.js",
   "/dashboard/clients/page": "app/dashboard/clients/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/settings/page": "app/dashboard/settings/page.js"
+  "/dashboard/page": "app/dashboard/page.js"
 }
