@@ -259,9 +259,9 @@ const uniqueSectors = [...new Set(clients.map(c => c.industry_category_name).fil
                     </Badge>
                     <Badge
                       variant="outline"
-                      className={client.is_active ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}
+                      className={client.isactive ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}
                     >
-                      {client.is_active ? "Active" : "Inactive"}
+                      {client.isactive ? "Active" : "Inactive"}
                     </Badge>
                   </div>
 
