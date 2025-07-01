@@ -12,6 +12,7 @@ import { EditClientModal } from "@/components/edit-client-modal"
 import { useAuth } from "@/app/providers"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SortAsc, SortDesc, Filter } from "lucide-react"
+import { getMultipleGCSGScores, cleanupGCSGCache } from "@/lib/gcsg-utils"
 
 
 export default function ClientsPage() {
@@ -30,6 +31,8 @@ export default function ClientsPage() {
   const [sectorFilter, setSectorFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
 
+  const [gcsgScores, setGcsgScores] = useState<Map<string, any>>(new Map())
+  const [loadingGCSG, setLoadingGCSG] = useState(false)
 
   type SortField = "business_name" | "industry_category_name" | "datecreated"
 
@@ -42,6 +45,73 @@ const handleSort = (field: SortField) => {
   }
 }
 
+
+
+//get GCSGs
+const loadGCSGScores = async (clientList: any[]) => {
+  setLoadingGCSG(true)
+  try {
+    // Clean up expired cache entries first
+    cleanupGCSGCache()
+    
+    // Get all place IDs from clients
+    const placeIds = clientList
+      .filter(client => client.place_id)
+      .map(client => client.place_id)
+    
+    if (placeIds.length > 0) {
+      console.log(`🎯 Loading GCSG scores for ${placeIds.length} clients with place IDs`)
+      const scores = await getMultipleGCSGScores(placeIds)
+      setGcsgScores(scores)
+      console.log(`✅ Loaded ${scores.size} GCSG scores`)
+    } else {
+      console.log("ℹ️ No clients have place IDs for GCSG lookup")
+      setGcsgScores(new Map())
+    }
+  } catch (error) {
+    console.error("❌ Error loading GCSG scores:", error)
+    setGcsgScores(new Map())
+  } finally {
+    setLoadingGCSG(false)
+  }
+}
+
+// Helper function to get GCSG display:
+const getGCSGDisplay = (client: any) => {
+  if (!client.place_id) {
+    return { score: "N/A", className: "text-gray-400", tooltip: "No Place ID available" }
+  }
+  
+  if (loadingGCSG) {
+    return { score: "...", className: "text-gray-400", tooltip: "Loading GCSG score" }
+  }
+  
+  const gcsgData = gcsgScores.get(client.place_id)
+  if (!gcsgData) {
+    return { score: "N/A", className: "text-gray-400", tooltip: "GCSG score not available" }
+  }
+  
+  if (gcsgData.error) {
+    return { score: "Error", className: "text-red-500", tooltip: `Error: ${gcsgData.error}` }
+  }
+  
+  if (gcsgData.score === null) {
+    return { score: "N/A", className: "text-gray-400", tooltip: "No GCSG score found" }
+  }
+  
+  // Color code based on score ranges
+  let className = "text-gray-600"
+  if (gcsgData.score >= 800) className = "text-green-600 font-semibold"
+  else if (gcsgData.score >= 700) className = "text-green-500"
+  else if (gcsgData.score >= 600) className = "text-yellow-600"
+  else if (gcsgData.score >= 500) className = "text-orange-500"
+  else className = "text-red-500"
+  
+  const tooltip = `GCSG Score: ${gcsgData.score}${gcsgData.cached ? ' (cached)' : ''}`
+  
+  return { score: gcsgData.score.toString(), className, tooltip }
+}
+
   // Load clients on component mount
   useEffect(() => {
     loadClients()
@@ -51,11 +121,23 @@ const handleSort = (field: SortField) => {
     setLoading(true)
     try {
       console.log("📊 Loading business clients...")
-
+  
       const response = await apiClient.getClients()
       if (response.success) {
         setClients(response.data)
         console.log("✅ Clients loaded:", response.data.length)
+
+        // ADD THIS DEBUG CODE:
+        console.log("🔍 Debug - All clients with place_id data:", response.data.map((c: any) => ({
+
+          name: c.business_name,
+          place_id: c.place_id,
+          hasPlaceId: !!c.place_id
+        })))
+
+        // Load GCSG scores after clients are loaded
+        await loadGCSGScores(response.data)
+        
       }
     } catch (error) {
       console.error("❌ Error loading clients:", error)
@@ -145,6 +227,14 @@ const uniqueSectors = [...new Set(clients.map(c => c.industry_category_name).fil
             <Plus className="h-4 w-4 mr-2" />
             Claim Business
           </Button>
+
+          <Button 
+            variant="outline" 
+            onClick={() => loadGCSGScores(clients)}
+            disabled={loadingGCSG}
+          >
+            {loadingGCSG ? "Loading..." : "Refresh GCSG"}
+          </Button>
         </div>
       </div>
 
@@ -232,8 +322,18 @@ const uniqueSectors = [...new Set(clients.map(c => c.industry_category_name).fil
                 <div className="flex items-center gap-6">
                   {/* GCSG Score */}
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-primary">{client.gcsg_score || "N/A"}</div>
-                    <div className="text-xs text-gray-500">GCSG Score</div>
+                    <div 
+                      className={`text-2xl font-bold ${getGCSGDisplay(client).className}`}
+                      title={getGCSGDisplay(client).tooltip}
+                    >
+                      {getGCSGDisplay(client).score}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      GCSG Score
+                      {client.place_id && gcsgScores.get(client.place_id)?.cached && (
+                        <span className="text-blue-500 ml-1" title="Cached result">📋</span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Reviews */}
