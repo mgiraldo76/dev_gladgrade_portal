@@ -1,4 +1,27 @@
-// API client for GladGrade Portal backend
+// File: lib/api-client.ts
+// API client for GladGrade Portal backend with Review functionality
+
+import { getAuth } from "firebase/auth"
+
+interface ReviewQueryParams {
+  page?: number
+  limit?: number
+  clientId?: string
+  placeId?: string
+  dateFrom?: string
+  dateTo?: string
+  hasImages?: string
+  ratingRange?: string
+  search?: string
+}
+
+interface ReviewCountParams {
+  placeId: string
+}
+
+interface BulkReviewCountParams {
+  placeIds: string[]
+}
 
 class ApiClient {
   private baseUrl: string
@@ -32,6 +55,56 @@ class ApiClient {
       return data
     } catch (error) {
       console.error(`❌ API Error: ${url}`, error)
+      throw error
+    }
+  }
+
+  // Helper function to get authentication token
+  private async getAuthToken(): Promise<string> {
+    try {
+      const auth = getAuth()
+      const user = auth.currentUser
+      if (user) {
+        return await user.getIdToken()
+      }
+      throw new Error('No authenticated user')
+    } catch (error) {
+      console.error('Error getting auth token:', error)
+      throw error
+    }
+  }
+
+  // Helper for GC proxy requests with auth
+  private async gcRequest(endpoint: string, options: RequestInit = {}) {
+    try {
+      // Check if we're in a browser environment and have auth
+      if (typeof window === 'undefined') {
+        throw new Error('GC requests can only be made from browser environment')
+      }
+
+      const url = endpoint.startsWith("http") ? endpoint : `/api/gcloud-proxy${endpoint}`
+
+      const config: RequestInit = {
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+        ...options,
+      }
+
+      console.log(`🌐 GC Proxy Request: ${options.method || "GET"} ${url}`)
+
+      const response = await fetch(url, config)
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`)
+      }
+
+      console.log(`✅ GC Proxy Response: ${url}`, data)
+      return data
+    } catch (error) {
+      console.error(`❌ GC Proxy Error: ${endpoint}`, error)
       throw error
     }
   }
@@ -161,6 +234,56 @@ class ApiClient {
     if (location) params.append("location", location)
 
     return this.request(`/clients/search-places?${params.toString()}`)
+  }
+
+  // ===== NEW: REVIEW API METHODS =====
+
+  // Get review count for a single place
+  async getReviewCount(params: ReviewCountParams) {
+    return this.gcRequest(`/reviews/review-count?placeId=${params.placeId}`)
+  }
+
+  // Get review counts for multiple places (bulk)
+  async getBulkReviewCounts(params: BulkReviewCountParams) {
+    return this.gcRequest('/reviews/review-counts-bulk', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    })
+  }
+
+  // Query reviews with filters and pagination  
+  async queryReviews(params: ReviewQueryParams = {}) {
+    // Use your existing /consumerReviews/query endpoint
+    return this.gcRequest('/consumerReviews/query', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    })
+  }
+
+  // Get images for a specific review
+  async getReviewImages(reviewId: string) {
+    return this.gcRequest(`/reviews/images/${reviewId}`)
+  }
+
+  // Moderate a review (admin only)
+  async moderateReview(reviewId: string, action: 'approve' | 'reject' | 'flag', notes?: string) {
+    return this.gcRequest('/reviews/moderate', {
+      method: 'POST',
+      body: JSON.stringify({
+        reviewId,
+        action,
+        notes
+      })
+    })
+  }
+
+  // Convenience method for reviews namespace (optional - for organized access)
+  reviews = {
+    getCount: this.getReviewCount.bind(this),
+    getBulkCounts: this.getBulkReviewCounts.bind(this),
+    query: this.queryReviews.bind(this),
+    getImages: this.getReviewImages.bind(this),
+    moderate: this.moderateReview.bind(this)
   }
 }
 
