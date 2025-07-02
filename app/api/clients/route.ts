@@ -37,6 +37,7 @@ export async function GET() {
         bc.phone,
         bc.website,
         bc.business_address,
+        bc.place_id,
         bc.claim_status,
         bc.claim_method,
         bc.security_level,

@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
         business_name, contact_name, contact_email, phone, website,
         business_address, claim_status, claim_method,
         claim_submitted_at, claim_approved_at, lead_source, sales_rep_id,
-        original_prospect_id, conversion_value
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        original_prospect_id, conversion_value, place_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         prospect.business_name,
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         client_contact_email || prospect.contact_email,
         client_contact_phone || prospect.phone,
         prospect.website,
-        // ✅ Build full address from components for business_clients
+        // Build full address from components for business_clients
         prospect.formatted_address || `${prospect.street_address || ""}, ${prospect.city || ""}, ${prospect.state || ""} ${prospect.zip_code || ""}`.trim(),
         "claimed",
         "sales_conversion",
@@ -87,12 +87,13 @@ export async function POST(request: NextRequest) {
         prospect.lead_source,
         prospect.salesperson_id,
         prospect_id,
-        conversion_value
+        conversion_value,
+        prospect.place_id // NEW: Add place_id from prospect
       ]
     )
 
     const newClient = clientResult.rows[0]
-    console.log("✅ Created client:", newClient.id)
+    console.log("✅ Created client:", newClient.id, "with place_id:", newClient.place_id || "null")
 
     // ✅ NEW: Create business_locations record with address components
     try {

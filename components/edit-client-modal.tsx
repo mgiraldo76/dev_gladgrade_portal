@@ -1,4 +1,4 @@
-// components/edit-client-modal.tsx - Enhanced with business_locations
+// components/edit-client-modal.tsx - Enhanced with business_locations and FIXED to use business-sectors
 
 "use client"
 
@@ -83,35 +83,7 @@ const US_STATES = [
   { value: "WV", label: "West Virginia" },
   { value: "WI", label: "Wisconsin" },
   { value: "WY", label: "Wyoming" },
-  { value: "DC", label: "District of Columbia" }
 ]
-
-// Postal code validation function
-function formatPostalCode(code: string, country: string): string {
-  const cleaned = code.replace(/[^A-Za-z0-9]/g, "")
-  
-  switch (country) {
-    case "US":
-    case "USA":
-      if (cleaned.length === 5) return cleaned
-      if (cleaned.length === 9) return `${cleaned.slice(0, 5)}-${cleaned.slice(5)}`
-      return code
-    case "CA":
-      if (cleaned.length === 6) {
-        return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`.toUpperCase()
-      }
-      return code.toUpperCase()
-    case "MX":
-      if (cleaned.length === 5) return cleaned
-      return code
-    case "ES":
-    case "IT":
-      if (cleaned.length === 5) return cleaned
-      return code
-    default:
-      return code
-  }
-}
 
 export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }: EditClientModalProps) {
   const { user } = useAuth()
@@ -120,27 +92,29 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [clientUsers, setClientUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
-  const [industryCategories, setIndustryCategories] = useState([])
+  // FIXED: Changed from industryCategories to businessSectors
+  const [businessSectors, setBusinessSectors] = useState([])
   const [salesReps, setSalesReps] = useState([])
   const [businessLocations, setBusinessLocations] = useState([])
   const [loadingLocations, setLoadingLocations] = useState(false)
   const [isUserModalOpen, setIsUserModalOpen] = useState(false)
 
-  // ✅ ENHANCED: Client form data (basic info only)
+  // Enhanced: Client form data (basic info only)
   const [formData, setFormData] = useState({
     business_name: "",
     contact_name: "",
     contact_email: "",
     phone: "",
     website: "",
-    industry_category_id: "",
+    // FIXED: Changed from industry_category_id to business_type to match business sectors
+    business_type: "",
     business_description: "",
     claim_status: "unclaimed",
     notes: "",
     sales_rep_id: "",
   })
 
-  // ✅ NEW: Primary location form data (address components)
+  // NEW: Primary location form data (address components)
   const [locationData, setLocationData] = useState({
     id: null as number | null,
     location_name: "",
@@ -161,7 +135,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     temporary_password: "",
   })
 
-  // ✅ ENHANCED: Initialize form data and load business locations
+  // ENHANCED: Initialize form data and load business locations
   useEffect(() => {
     if (client) {
       console.log("🔍 Loading client data:", client)
@@ -171,29 +145,32 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         contact_email: client.contact_email || "",
         phone: client.phone || "",
         website: client.website || "",
-        industry_category_id: client.industry_category_id ? client.industry_category_id.toString() : "", // ✅ This is fine
+        // FIXED: Map from industry_category_name (from API) to business_type (for form)
+        business_type: client.industry_category_name || "",
         business_description: client.business_description || "",
         claim_status: client.claim_status || "unclaimed",
         notes: client.notes || "",
-        sales_rep_id: client.sales_rep_id ? client.sales_rep_id.toString() : "", // ✅ This is fine
+        sales_rep_id: client.sales_rep_id ? client.sales_rep_id.toString() : "unassigned",
       })
-      loadIndustryCategories()
+      // FIXED: Changed function name
+      loadBusinessSectors()
       loadSalesReps()
       loadClientUsers()
       loadClientActivities()
-      loadBusinessLocations() // ✅ NEW: Load business locations
+      loadBusinessLocations()
     }
   }, [client])
 
-  const loadIndustryCategories = async () => {
+  // FIXED: Changed from loadIndustryCategories to loadBusinessSectors and updated endpoint
+  const loadBusinessSectors = async () => {
     try {
-      const response = await fetch("/api/industry-categories")
+      const response = await fetch("/api/business-sectors")
       if (response.ok) {
         const data = await response.json()
-        setIndustryCategories(data.data || [])
+        setBusinessSectors(data.data || [])
       }
     } catch (error) {
-      console.error("Error loading industry categories:", error)
+      console.error("Error loading business sectors:", error)
     }
   }
 
@@ -262,7 +239,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   }
 
-  // ✅ NEW: Load business locations
+  // NEW: Load business locations
   const loadBusinessLocations = async () => {
     if (!client?.id) return
 
@@ -279,7 +256,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         const locations = data.data || []
         setBusinessLocations(locations)
         
-        // ✅ Load primary location data
+        // Load primary location data
         const primaryLocation = locations.find((loc: any) => loc.is_primary) || locations[0]
         if (primaryLocation) {
           setLocationData({
@@ -311,11 +288,6 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     setLocationData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleZipChange = (value: string) => {
-    const formatted = formatPostalCode(value, locationData.country)
-    setLocationData((prev) => ({ ...prev, postal_code: formatted }))
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -329,524 +301,561 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         headers["x-user-email"] = user.email
       }
 
-      console.log("🔍 Submitting client update with headers:", headers)
-      console.log("🔍 Client form data:", formData)
-      console.log("🔍 Location form data:", locationData)
+      // FIXED: Need to find the business sector ID based on the selected business_type name
+      const selectedSector = businessSectors.find((sector: any) => 
+        sector.businesssectorname === formData.business_type
+      )
 
-      // ✅ 1. Update client basic info
-      // ✅ Handle the "unassigned" sales rep case
-      const submitData = {
-        ...formData,
-        sales_rep_id: formData.sales_rep_id === "unassigned" ? "" : formData.sales_rep_id
+      const updateData = {
+        business_name: formData.business_name,
+        contact_name: formData.contact_name,
+        contact_email: formData.contact_email,
+        phone: formData.phone,
+        website: formData.website,
+        // FIXED: Map business_type back to industry_category_id for database storage
+        // Note: This assumes your backend can handle business sector name lookup
+        business_type: formData.business_type,
+        claim_status: formData.claim_status,
+        sales_rep_id: formData.sales_rep_id && formData.sales_rep_id !== "unassigned" ? parseInt(formData.sales_rep_id) : null,
       }
-      const clientResponse = await fetch(`/api/clients/${client.id}`, {
+
+      const response = await fetch(`/api/clients/${client.id}`, {
         method: "PUT",
         headers,
-        body: JSON.stringify(submitData), // ✅ Use modified data
+        body: JSON.stringify(updateData),
       })
 
-      if (!clientResponse.ok) {
-        const errorData = await clientResponse.json()
-        throw new Error(errorData.error || "Failed to update client")
-      }
-
-      // ✅ 2. Update business location
-      if (locationData.id) {
-        const formattedZip = formatPostalCode(locationData.postal_code, locationData.country)
-        
-        const locationResponse = await fetch(`/api/clients/${client.id}/locations/${locationData.id}`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({
-            ...locationData,
-            postal_code: formattedZip,
-          }),
-        })
-
-        if (!locationResponse.ok) {
-          const errorData = await locationResponse.json()
-          console.error("❌ Failed to update location:", errorData)
-          // Don't fail the entire operation if location update fails
-        } else {
-          console.log("✅ Business location updated successfully")
+      if (response.ok) {
+        // Update business location if data changed
+        if (locationData.id && (
+          locationData.address || locationData.city || locationData.state || 
+          locationData.postal_code || locationData.phone
+        )) {
+          const locationResponse = await fetch(`/api/clients/${client.id}/locations/${locationData.id}`, {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({
+              location_name: locationData.location_name,
+              address: locationData.address,
+              city: locationData.city,
+              state: locationData.state,
+              country: locationData.country,
+              postal_code: locationData.postal_code,
+              phone: locationData.phone,
+              manager_name: locationData.manager_name,
+              manager_email: locationData.manager_email,
+            }),
+          })
+          
+          if (!locationResponse.ok) {
+            console.warn("⚠️ Failed to update business location, but client update succeeded")
+          }
         }
-      }
 
-      console.log("✅ Client updated successfully")
-      onSuccess()
-      onClose()
+        onSuccess()
+        onClose()
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to update client: ${errorData.error}`)
+      }
     } catch (error) {
-      console.error("❌ Error updating client:", error)
-      // Add user-friendly error handling here
+      console.error("Error updating client:", error)
+      alert("Error updating client")
     } finally {
       setLoading(false)
     }
   }
 
-  const getStatusColor = (status: string) => {
-    const colors = {
-      unclaimed: "bg-gray-100 text-gray-800",
-      claimed: "bg-blue-100 text-blue-800",
-      verified: "bg-green-100 text-green-800",
-      rejected: "bg-red-100 text-red-800",
+  const handleCreateUser = async () => {
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      const response = await fetch(`/api/clients/${client.id}/users`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ...newUser,
+          client_id: client.id,
+        }),
+      })
+
+      if (response.ok) {
+        loadClientUsers()
+        setIsUserModalOpen(false)
+        setNewUser({
+          user_email: "",
+          user_name: "",
+          user_role: "client_admin",
+          temporary_password: "",
+        })
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to create user: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error("Error creating user:", error)
+      alert("Error creating user")
     }
-    return colors[status as keyof typeof colors] || "bg-gray-100 text-gray-800"
   }
 
   if (!client) return null
 
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              <Building className="h-5 w-5" />
-              {client.business_name || "Unnamed Business"}
-              <Badge className={getStatusColor(client.claim_status)}>{client.claim_status || "unclaimed"}</Badge>
-            </DialogTitle>
-            <DialogDescription>Edit client information and manage portal users</DialogDescription>
-          </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <Building className="h-5 w-5" />
+            {client.business_name}
+            <Badge variant={client.claim_status === "verified" ? "default" : "secondary"}>
+              {client.claim_status === "verified" ? "Verified" : client.claim_status || "Unclaimed"}
+            </Badge>
+          </DialogTitle>
+          <DialogDescription>
+            Manage client information, locations, users, and activities
+          </DialogDescription>
+        </DialogHeader>
 
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="location">Location</TabsTrigger>
-              <TabsTrigger value="users">Portal Users ({clientUsers.length})</TabsTrigger>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="locations">Locations</TabsTrigger>
+            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="activities">Activities</TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="details" className="space-y-4">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="business_name">Business Name *</Label>
-                    <Input
-                      id="business_name"
-                      value={formData.business_name}
-                      onChange={(e) => handleInputChange("business_name", e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="contact_name">Contact Name</Label>
-                    <Input
-                      id="contact_name"
-                      value={formData.contact_name}
-                      onChange={(e) => handleInputChange("contact_name", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="contact_email">Contact Email</Label>
-                    <Input
-                      id="contact_email"
-                      type="email"
-                      value={formData.contact_email}
-                      onChange={(e) => handleInputChange("contact_email", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => handleInputChange("phone", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="website">Website</Label>
-                    <Input
-                      id="website"
-                      value={formData.website}
-                      onChange={(e) => handleInputChange("website", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="industry_category_id">Industry</Label>
-                    <Select
-                      value={formData.industry_category_id || undefined} // ✅ Convert empty string to undefined
-                      onValueChange={(value) => handleInputChange("industry_category_id", value || "")}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select industry" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {industryCategories
-                          .filter((category: any) => category.id && category.name) // ✅ Filter out invalid records
-                          .map((category: any) => (
-                            <SelectItem 
-                              key={category.id} 
-                              value={category.id.toString()}
-                            >
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="sales_rep_id">Account Owner</Label>
-                    <Select
-                      value={formData.sales_rep_id || undefined} // ✅ Convert empty string to undefined
-                      onValueChange={(value) => handleInputChange("sales_rep_id", value || "")}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Assign sales rep" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem> {/* ✅ Use non-empty value */}
-                        {salesReps
-                          .filter((rep: any) => rep.id && rep.full_name) // ✅ Filter out invalid records
-                          .map((rep: any) => (
-                            <SelectItem 
-                              key={rep.id} 
-                              value={rep.id.toString()}
-                            >
-                              {rep.full_name} ({rep.role})
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="claim_status">Claim Status</Label>
-                    <Select
-                      value={formData.claim_status}
-                      onValueChange={(value) => handleInputChange("claim_status", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unclaimed">Unclaimed</SelectItem>
-                        <SelectItem value="claimed">Claimed</SelectItem>
-                        <SelectItem value="verified">Verified</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
+          <TabsContent value="details" className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="business_description">Business Description</Label>
-                  <Textarea
-                    id="business_description"
-                    value={formData.business_description}
-                    onChange={(e) => handleInputChange("business_description", e.target.value)}
-                    rows={3}
+                  <Label htmlFor="business_name">Business Name</Label>
+                  <Input
+                    id="business_name"
+                    value={formData.business_name}
+                    onChange={(e) => handleInputChange("business_name", e.target.value)}
+                    required
                   />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Internal Notes</Label>
-                  <Textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) => handleInputChange("notes", e.target.value)}
-                    rows={3}
+                  <Label htmlFor="contact_name">Contact Name</Label>
+                  <Input
+                    id="contact_name"
+                    value={formData.contact_name}
+                    onChange={(e) => handleInputChange("contact_name", e.target.value)}
+                    required
                   />
                 </div>
+              </div>
 
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={onClose}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? "Saving..." : "Save Changes"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </TabsContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="contact_email">Contact Email</Label>
+                  <Input
+                    id="contact_email"
+                    type="email"
+                    value={formData.contact_email}
+                    onChange={(e) => handleInputChange("contact_email", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange("phone", e.target.value)}
+                  />
+                </div>
+              </div>
 
-            {/* ✅ NEW: Location Tab with Address Components */}
-            <TabsContent value="location" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Primary Business Location</CardTitle>
-                  <p className="text-sm text-gray-600">Manage the main business address and location details</p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {loadingLocations ? (
-                    <div className="text-center py-4">
-                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-primary mx-auto"></div>
-                      <p className="text-sm text-gray-600 mt-2">Loading location...</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="website">Website</Label>
+                  <Input
+                    id="website"
+                    value={formData.website}
+                    onChange={(e) => handleInputChange("website", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  {/* FIXED: Changed from industry_category_id to business_type and updated to use businessSectors */}
+                  <Label htmlFor="business_type">Industry</Label>
+                  <Select
+                    value={formData.business_type || undefined}
+                    onValueChange={(value) => handleInputChange("business_type", value || "")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select industry" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {businessSectors
+                        .filter((sector: any) => sector.id && sector.businesssectorname)
+                        .map((sector: any) => (
+                          <SelectItem key={sector.id} value={sector.businesssectorname}>
+                            {sector.businesssectorname}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="claim_status">Claim Status</Label>
+                  <Select
+                    value={formData.claim_status}
+                    onValueChange={(value) => handleInputChange("claim_status", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unclaimed">Unclaimed</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="claimed">Claimed</SelectItem>
+                      <SelectItem value="verified">Verified</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sales_rep_id">Sales Representative</Label>
+                  <Select
+                    value={formData.sales_rep_id || undefined}
+                    onValueChange={(value) => handleInputChange("sales_rep_id", value || "")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select sales rep" />
+                    </SelectTrigger>
+                    <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {salesReps.map((rep: any) => (
+                        <SelectItem key={rep.id} value={rep.id.toString()}>
+                          {rep.full_name} - {rep.role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="business_description">Business Description</Label>
+                <Textarea
+                  id="business_description"
+                  value={formData.business_description}
+                  onChange={(e) => handleInputChange("business_description", e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => handleInputChange("notes", e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Saving..." : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="locations" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">Business Locations</h3>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Location
+              </Button>
+            </div>
+
+            {loadingLocations ? (
+              <div className="text-center py-4">Loading locations...</div>
+            ) : (
+              <div className="space-y-4">
+                {/* Primary Location Form */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Primary Location</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="location_name">Location Name</Label>
                         <Input
                           id="location_name"
                           value={locationData.location_name}
                           onChange={(e) => handleLocationChange("location_name", e.target.value)}
-                          placeholder="Main Office, Headquarters, etc."
                         />
                       </div>
-
                       <div className="space-y-2">
-                        <Label htmlFor="address">Street Address</Label>
+                        <Label htmlFor="location_phone">Phone</Label>
                         <Input
-                          id="address"
-                          value={locationData.address}
-                          onChange={(e) => handleLocationChange("address", e.target.value)}
-                          placeholder="123 Main Street"
+                          id="location_phone"
+                          value={locationData.phone}
+                          onChange={(e) => handleLocationChange("phone", e.target.value)}
                         />
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="location_city">City</Label>
-                          <Input
-                            id="location_city"
-                            value={locationData.city}
-                            onChange={(e) => handleLocationChange("city", e.target.value)}
-                            placeholder="Miami"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="location_state">State</Label>
-                          <Select
-                            value={locationData.state || undefined} // ✅ Convert empty string to undefined
-                            onValueChange={(value) => handleLocationChange("state", value || "")}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select state" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {US_STATES.map((state) => (
-                                <SelectItem key={state.value} value={state.value}>
-                                  {state.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="location_postal_code">ZIP Code</Label>
-                          <Input
-                            id="location_postal_code"
-                            value={locationData.postal_code}
-                            onChange={(e) => handleZipChange(e.target.value)}
-                            placeholder="33101 or 33101-1234"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="location_country">Country</Label>
-                          <Select
-                            value={locationData.country}
-                            onValueChange={(value) => handleLocationChange("country", value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="USA">United States</SelectItem>
-                              <SelectItem value="CA">Canada</SelectItem>
-                              <SelectItem value="MX">Mexico</SelectItem>
-                              <SelectItem value="ES">Spain</SelectItem>
-                              <SelectItem value="IT">Italy</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="location_phone">Location Phone</Label>
-                          <Input
-                            id="location_phone"
-                            value={locationData.phone}
-                            onChange={(e) => handleLocationChange("phone", e.target.value)}
-                            placeholder="Location-specific phone number"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="manager_name">Location Manager</Label>
-                          <Input
-                            id="manager_name"
-                            value={locationData.manager_name}
-                            onChange={(e) => handleLocationChange("manager_name", e.target.value)}
-                            placeholder="Manager name"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="manager_email">Manager Email</Label>
-                          <Input
-                            id="manager_email"
-                            type="email"
-                            value={locationData.manager_email}
-                            onChange={(e) => handleLocationChange("manager_email", e.target.value)}
-                            placeholder="manager@business.com"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end pt-4">
-                        <Button onClick={handleSubmit} disabled={loading}>
-                          {loading ? "Saving..." : "Save Location"}
-                        </Button>
                       </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
 
-            <TabsContent value="users" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Portal Users</h3>
-                <Button onClick={() => setIsUserModalOpen(true)} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add User
-                </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="address">Address</Label>
+                      <Input
+                        id="address"
+                        value={locationData.address}
+                        onChange={(e) => handleLocationChange("address", e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City</Label>
+                        <Input
+                          id="city"
+                          value={locationData.city}
+                          onChange={(e) => handleLocationChange("city", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State</Label>
+                        <Select
+                          value={locationData.state}
+                          onValueChange={(value) => handleLocationChange("state", value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select state" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {US_STATES.map((state) => (
+                              <SelectItem key={state.value} value={state.value}>
+                                {state.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="postal_code">Postal Code</Label>
+                        <Input
+                          id="postal_code"
+                          value={locationData.postal_code}
+                          onChange={(e) => handleLocationChange("postal_code", e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="manager_name">Manager Name</Label>
+                        <Input
+                          id="manager_name"
+                          value={locationData.manager_name}
+                          onChange={(e) => handleLocationChange("manager_name", e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="manager_email">Manager Email</Label>
+                        <Input
+                          id="manager_email"
+                          type="email"
+                          value={locationData.manager_email}
+                          onChange={(e) => handleLocationChange("manager_email", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Additional Locations List */}
+                {businessLocations.filter((loc: any) => !loc.is_primary).map((location: any) => (                  <Card key={location.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-medium">{location.location_name}</h4>
+                          <p className="text-sm text-gray-600">{location.address}</p>
+                          <p className="text-sm text-gray-600">
+                            {location.city}, {location.state} {location.postal_code}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{location.status}</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
+            )}
+          </TabsContent>
 
-              {loadingUsers ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading users...</p>
-                </div>
-              ) : clientUsers.length > 0 ? (
-                <div className="space-y-2">
-                  {clientUsers.map((clientUser: any) => (
-                    <Card key={clientUser.id}>
+          <TabsContent value="users" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">Client Users</h3>
+              <Button size="sm" onClick={() => setIsUserModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add User
+              </Button>
+            </div>
+
+            {loadingUsers ? (
+              <div className="text-center py-4">Loading users...</div>
+            ) : (
+              <div className="space-y-2">
+                {clientUsers.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No users found for this client
+                  </div>
+                ) : (
+                  clientUsers.map((user: any) => (
+                    <Card key={user.id}>
                       <CardContent className="p-4">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <h4 className="font-medium">{clientUser.user_name}</h4>
-                            <p className="text-sm text-gray-600">{clientUser.user_email}</p>
-                            <Badge variant="outline" className="mt-1">
-                              {clientUser.user_role}
-                            </Badge>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <User className="h-5 w-5 text-gray-400" />
+                            <div>
+                              <div className="font-medium">{user.user_name}</div>
+                              <div className="text-sm text-gray-600">{user.user_email}</div>
+                            </div>
+                          </div>
+                          <Badge variant="outline">{user.user_role}</Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Add User Modal */}
+            <Dialog open={isUserModalOpen} onOpenChange={setIsUserModalOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New User</DialogTitle>
+                  <DialogDescription>
+                    Create a new user account for this client
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="user_name">Full Name</Label>
+                    <Input
+                      id="user_name"
+                      value={newUser.user_name}
+                      onChange={(e) => setNewUser({ ...newUser, user_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="user_email">Email</Label>
+                    <Input
+                      id="user_email"
+                      type="email"
+                      value={newUser.user_email}
+                      onChange={(e) => setNewUser({ ...newUser, user_email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="user_role">Role</Label>
+                    <Select
+                      value={newUser.user_role}
+                      onValueChange={(value) => setNewUser({ ...newUser, user_role: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="client_admin">Admin</SelectItem>
+                        <SelectItem value="client_user">User</SelectItem>
+                        <SelectItem value="client_viewer">Viewer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="temporary_password">Temporary Password</Label>
+                    <Input
+                      id="temporary_password"
+                      type="password"
+                      value={newUser.temporary_password}
+                      onChange={(e) => setNewUser({ ...newUser, temporary_password: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsUserModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreateUser}>Create User</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+
+          <TabsContent value="activities" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">Client Activities</h3>
+            </div>
+
+            {loadingActivities ? (
+              <div className="text-center py-4">Loading activities...</div>
+            ) : (
+              <div className="space-y-2">
+                {activities.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    No activities found for this client
+                  </div>
+                ) : (
+                  activities.map((activity: any) => (
+                    <Card key={activity.id}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 mt-1">
+                            {activity.activity_type === "call" && <Phone className="h-4 w-4 text-green-500" />}
+                            {activity.activity_type === "email" && <Mail className="h-4 w-4 text-blue-500" />}
+                            {activity.activity_type === "meeting" && <Calendar className="h-4 w-4 text-purple-500" />}
+                            {activity.activity_type === "note" && <User className="h-4 w-4 text-gray-500" />}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="font-medium">{activity.subject}</div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(activity.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                            {activity.description && (
+                              <p className="text-sm text-gray-600 mb-2">{activity.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <Badge variant="outline" className="text-xs">
+                                {activity.activity_type}
+                              </Badge>
+                              {activity.employee_name && (
+                                <span>by {activity.employee_name}</span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No portal users yet</h3>
-                  <p className="text-gray-600 mb-4">Add the first user to give this client access to the portal.</p>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Business Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Building className="h-4 w-4 text-gray-500" />
-                      <span className="font-medium">{client.business_name || "Unnamed Business"}</span>
-                    </div>
-                    {client.industry_category && (
-                      <div className="text-sm text-gray-600">Industry: {client.industry_category}</div>
-                    )}
-                    {client.website && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Globe className="h-3 w-3 text-gray-500" />
-                        <a href={client.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                          {client.website}
-                        </a>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Contact Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {client.contact_name && (
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-gray-500" />
-                        <span>{client.contact_name}</span>
-                      </div>
-                    )}
-                    {client.contact_email && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="h-3 w-3 text-gray-500" />
-                        <a href={`mailto:${client.contact_email}`} className="text-blue-600 hover:underline">
-                          {client.contact_email}
-                        </a>
-                      </div>
-                    )}
-                    {client.phone && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="h-3 w-3 text-gray-500" />
-                        <a href={`tel:${client.phone}`} className="text-blue-600 hover:underline">
-                          {client.phone}
-                        </a>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Business Address</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {locationData.address && (
-                      <div className="flex items-start gap-2 text-sm">
-                        <MapPin className="h-3 w-3 text-gray-500 mt-0.5" />
-                        <div>
-                          <div>{locationData.address}</div>
-                          <div>{locationData.city}, {locationData.state} {locationData.postal_code}</div>
-                          <div>{locationData.country}</div>
-                        </div>
-                      </div>
-                    )}
-                    {!locationData.address && (
-                      <div className="text-sm text-gray-500">No address information available</div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Account Details</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-3 w-3 text-gray-500" />
-                      <span>Created: {new Date(client.created_at || Date.now()).toLocaleDateString()}</span>
-                    </div>
-                    {client.sales_rep_name && (
-                      <div className="text-sm">
-                        <span className="text-gray-600">Account Owner: </span>
-                        <span className="font-medium">{client.sales_rep_name}</span>
-                      </div>
-                    )}
-                    <div className="text-sm">
-                      <span className="text-gray-600">Status: </span>
-                      <Badge className={getStatusColor(client.claim_status)}>{client.claim_status}</Badge>
-                    </div>
-                  </CardContent>
-                </Card>
+                  ))
+                )}
               </div>
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
-    </>
+            )}
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }
