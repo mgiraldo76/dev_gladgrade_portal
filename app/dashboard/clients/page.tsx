@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Building, MapPin, Star, Calendar, User, Phone, Globe, Shield, TrendingUp, MessageSquare, ExternalLink } from 'lucide-react'
+import { Plus, Search, Building, MapPin, Star, Calendar, User, Phone, Globe, Shield, TrendingUp, MessageSquare, ExternalLink, BadgeCheck, CheckCircle, XCircle, Users } from 'lucide-react'
 import { apiClient } from "@/lib/api-client"
 import { EditClientModal } from "@/components/edit-client-modal"
 import { useAuth } from "@/app/providers"
@@ -16,7 +16,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getMultipleGCSGScores, cleanupGCSGCache } from "@/lib/gcsg-utils"
 import Link from "next/link"
 import { getAuth } from 'firebase/auth'
-
 
 // Add this interface for review counts
 interface ReviewCounts {
@@ -468,8 +467,8 @@ export default function ClientsPage() {
                         )}
                       </div>
                     </div>
-
-                    {/* Star Rating */}
+                    {/*
+                    * Star Rating *
                     <div className="text-center">
                       <div className="flex items-center gap-1">
                         <Star className="h-4 w-4 text-yellow-500" />
@@ -479,26 +478,48 @@ export default function ClientsPage() {
                       </div>
                       <div className="text-xs text-gray-500">Avg Rating</div>
                     </div>
+                    */}
 
-                    {/* Status Badges */}
-                    <div className="flex flex-col gap-2">
-                      <Badge variant={client.claim_status === "verified" ? "default" : "secondary"}>
-                        {client.claim_status === "verified" ? (
-                          <>
-                            <Shield className="h-3 w-3 mr-1" />
-                            Verified
-                          </>
-                        ) : (
-                          client.claim_status || "Unclaimed"
-                        )}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className={client.isactive ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}
-                      >
-                        {client.isactive ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
+                   
+{/* Status Icons - Professional & Clear */}
+<div className="flex flex-col gap-3 items-center">
+  {/* Verification Status */}
+  <div className="relative group">
+    {client.claim_status === "verified" ? (
+      <Shield className="h-5 w-5 text-green-500 cursor-pointer fill-current" />
+    ) : client.claim_status === "pending" ? (
+      <Shield className="h-5 w-5 text-orange-400 cursor-pointer fill-current" />
+    ) : client.claim_status === "claimed" ? (
+      <Shield className="h-5 w-5 text-purple-300 cursor-pointer fill-current" />
+    ) : client.claim_status === "rejected" ? (
+      <Shield className="h-5 w-5 text-red-500 cursor-pointer fill-current" />
+    ) : (
+      <Shield className="h-5 w-5 text-gray-300 cursor-pointer fill-current" />
+    )}
+    {/* Tooltip */}
+    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10 pointer-events-none">
+      {client.claim_status === "verified" ? "Verified" : 
+       client.claim_status === "pending" ? "Pending Verification" : 
+       client.claim_status === "claimed" ? "Claimed" :
+       client.claim_status === "rejected" ? "Rejected" :
+       "Unclaimed"}
+    </div>
+  </div>
+
+  {/* Activity Status */}
+  <div className="relative group">
+    {client.isactive ? (
+      <CheckCircle className="h-5 w-5 text-green-500 cursor-pointer" />
+    ) : (
+      <XCircle className="h-5 w-5 text-red-500 cursor-pointer" />
+    )}
+    {/* Tooltip */}
+    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10 pointer-events-none">
+      {client.isactive ? "Active" : "Inactive"}
+    </div>
+  </div>
+</div>
+
 
                     {/* Sales Rep */}
                     <div className="text-right">
@@ -552,7 +573,7 @@ export default function ClientsPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Building className="h-5 w-5 text-blue-600" />
+              <Users className="h-5 w-5 text-blue-600" />
               <div>
                 <div className="text-2xl font-bold">{filteredClients.length}</div>
                 <div className="text-sm text-gray-600">
