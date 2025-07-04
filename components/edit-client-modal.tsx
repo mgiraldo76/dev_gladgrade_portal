@@ -205,6 +205,13 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
   const [selectedPlace, setSelectedPlace] = useState<GooglePlace | null>(null)
   const [showLocationSearch, setShowLocationSearch] = useState(true)
 
+  // Activity form state - identical to prospect modal
+  const [newActivity, setNewActivity] = useState({
+    activity_type: "call",
+    subject: "",
+    description: "",
+  })
+
   // Enhanced: Client form data with security_level
   const [formData, setFormData] = useState({
     business_name: "",
@@ -241,6 +248,16 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     user_name: "",
     user_role: "client_admin",
     temporary_password: "",
+  })
+
+  // Edit user state
+  const [editUser, setEditUser] = useState({
+    email: "",
+    full_name: "",
+    role: "client_admin",
+    status: "active",
+    reset_password: false,
+    new_password: "",
   })
 
   // Initialize form data and load business locations
@@ -311,13 +328,20 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         headers["x-user-email"] = user.email
       }
 
+      console.log(`🔍 Loading users for client ${client.id}`)
       const response = await fetch(`/api/clients/${client.id}/users`, { headers })
+      
       if (response.ok) {
         const data = await response.json()
+        console.log(`✅ Loaded ${data.data?.length || 0} users:`, data.data)
         setClientUsers(data.data || [])
+      } else {
+        console.error("❌ Failed to load users:", response.status, response.statusText)
+        const errorData = await response.json().catch(() => ({}))
+        console.error("Error details:", errorData)
       }
     } catch (error) {
-      console.error("Error loading client users:", error)
+      console.error("❌ Error loading client users:", error)
     } finally {
       setLoadingUsers(false)
     }
@@ -342,6 +366,66 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
       console.error("Error loading client activities:", error)
     } finally {
       setLoadingActivities(false)
+    }
+  }
+
+  // Add activity function - identical to prospect modal
+  const handleAddActivity = async () => {
+    if (!newActivity.subject.trim()) {
+      alert("Please enter a subject for the activity")
+      return
+    }
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      console.log("🔍 Adding activity with headers:", headers)
+
+      const response = await fetch(`/api/clients/${client.id}/activities`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          client_id: client.id,
+          ...newActivity,
+        }),
+      })
+
+      if (response.ok) {
+        setNewActivity({ activity_type: "call", subject: "", description: "" })
+        loadClientActivities() // Reload activities
+        alert("Activity added successfully!")
+      } else {
+        const errorData = await response.json()
+        console.error("Failed to add activity:", errorData)
+        alert(`Failed to add activity: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error("Error adding activity:", error)
+      alert("Error adding activity")
+    }
+  }
+
+  // Helper function to get activity type icon - identical to prospect modal
+  const getActivityIcon = (activityType: string) => {
+    switch (activityType) {
+      case "call":
+        return <Phone className="h-4 w-4 text-green-500" />
+      case "email":
+        return <Mail className="h-4 w-4 text-blue-500" />
+      case "meeting":
+        return <Calendar className="h-4 w-4 text-purple-500" />
+      case "follow_up":
+        return <Calendar className="h-4 w-4 text-yellow-500" />
+      case "support":
+        return <User className="h-4 w-4 text-blue-500" />
+      default:
+        return <User className="h-4 w-4 text-gray-500" />
     }
   }
 
@@ -572,6 +656,12 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
   }
 
   const handleCreateUser = async () => {
+    // Validation on frontend first
+    if (!newUser.user_name.trim() || !newUser.user_email.trim()) {
+      alert("Please fill in all required fields")
+      return
+    }
+
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -581,17 +671,37 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         headers["x-user-email"] = user.email
       }
 
+      console.log("🔍 Creating user with data:", {
+        email: newUser.user_email,
+        full_name: newUser.user_name,
+        role: newUser.user_role,
+        client_id: client.id,
+        // Don't log password for security
+      })
+
       const response = await fetch(`/api/clients/${client.id}/users`, {
         method: "POST",
         headers,
         body: JSON.stringify({
-          ...newUser,
+          email: newUser.user_email.trim(),
+          full_name: newUser.user_name.trim(),
+          role: newUser.user_role,
+          temporary_password: newUser.temporary_password.trim(),
           client_id: client.id,
+          send_welcome_email: true,
+          create_firebase_account: true,
         }),
       })
 
+      const responseData = await response.json()
+      console.log("🔍 API Response:", responseData)
+
       if (response.ok) {
-        loadClientUsers()
+        // Add a small delay to ensure database transaction is complete
+        setTimeout(() => {
+          loadClientUsers()
+        }, 500)
+        
         setIsUserModalOpen(false)
         setNewUser({
           user_email: "",
@@ -599,13 +709,14 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
           user_role: "client_admin",
           temporary_password: "",
         })
+        alert(`User created successfully! Temporary password: ${responseData.data.temporary_password}`)
       } else {
-        const errorData = await response.json()
-        alert(`Failed to create user: ${errorData.error}`)
+        console.error("❌ API Error:", responseData)
+        alert(`Failed to create user: ${responseData.error || 'Unknown error'}`)
       }
     } catch (error) {
-      console.error("Error creating user:", error)
-      alert("Error creating user")
+      console.error("❌ Network Error:", error)
+      alert("Network error creating user. Please check your connection and try again.")
     }
   }
 
@@ -1104,23 +1215,45 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
               <div className="text-center py-4">Loading users...</div>
             ) : (
               <div className="space-y-2">
+                {/* Debug info */}
+                <div className="text-xs text-gray-500 mb-2">
+                  Found {clientUsers.length} user(s)
+                </div>
+                
                 {clientUsers.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    No users found for this client
+                    <User className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
+                    <p className="text-gray-600 mb-4">Add your first client user to get started.</p>
+                    <Button onClick={() => setIsUserModalOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First User
+                    </Button>
                   </div>
                 ) : (
-                  clientUsers.map((user: any) => (
-                    <Card key={user.id}>
+                  clientUsers.map((clientUser: any) => (
+                    <Card key={clientUser.id || clientUser.firebase_uid}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <User className="h-5 w-5 text-gray-400" />
                             <div>
-                              <div className="font-medium">{user.user_name}</div>
-                              <div className="text-sm text-gray-600">{user.user_email}</div>
+                              <div className="font-medium">{clientUser.full_name || clientUser.user_name}</div>
+                              <div className="text-sm text-gray-600">{clientUser.email || clientUser.user_email}</div>
+                              {clientUser.firebase_uid && (
+                                <div className="text-xs text-green-600">✓ Firebase Account</div>
+                              )}
+                              {clientUser.created_by_name && (
+                                <div className="text-xs text-gray-500">Created by: {clientUser.created_by_name}</div>
+                              )}
                             </div>
                           </div>
-                          <Badge variant="outline">{user.user_role}</Badge>
+                          <div className="flex flex-col items-end gap-1">
+                            <Badge variant="outline">{clientUser.role || clientUser.user_role}</Badge>
+                            <Badge variant={clientUser.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                              {clientUser.status || 'active'}
+                            </Badge>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -1167,6 +1300,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="client_admin">Admin</SelectItem>
+                        <SelectItem value="client_moderator">Moderator</SelectItem>
                         <SelectItem value="client_user">User</SelectItem>
                         <SelectItem value="client_viewer">Viewer</SelectItem>
                       </SelectContent>
@@ -1179,6 +1313,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                       type="password"
                       value={newUser.temporary_password}
                       onChange={(e) => setNewUser({ ...newUser, temporary_password: e.target.value })}
+                      placeholder="Leave empty to auto-generate"
                     />
                   </div>
                 </div>
@@ -1193,55 +1328,160 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
           </TabsContent>
 
           <TabsContent value="activities" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium">Client Activities</h3>
-            </div>
+            {/* Add New Activity Section - Identical to prospect modal */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Add New Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="activity_type">Activity Type</Label>
+                    <Select
+                      value={newActivity.activity_type}
+                      onValueChange={(value) => setNewActivity((prev) => ({ ...prev, activity_type: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="call">
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-green-500" />
+                            Phone Call
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="email">
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-blue-500" />
+                            Email
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="meeting">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-purple-500" />
+                            Meeting
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="note">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-500" />
+                            Note
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="follow_up">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-yellow-500" />
+                            Follow Up
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="support">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-blue-500" />
+                            Support
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Subject *</Label>
+                    <Input
+                      id="subject"
+                      value={newActivity.subject}
+                      onChange={(e) => setNewActivity((prev) => ({ ...prev, subject: e.target.value }))}
+                      placeholder="Brief description of activity"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={newActivity.description}
+                    onChange={(e) => setNewActivity((prev) => ({ ...prev, description: e.target.value }))}
+                    rows={3}
+                    placeholder="Detailed notes about the activity, outcome, next steps..."
+                  />
+                </div>
+                <Button 
+                  onClick={handleAddActivity} 
+                  disabled={!newActivity.subject.trim()}
+                  className="w-full"
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Add Activity
+                </Button>
+              </CardContent>
+            </Card>
 
-            {loadingActivities ? (
-              <div className="text-center py-4">Loading activities...</div>
-            ) : (
-              <div className="space-y-2">
-                {activities.length === 0 ? (
+            {/* Activities List - Identical to prospect modal */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Building className="h-4 w-4" />
+                  Activity History ({activities.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingActivities ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                    <p className="text-gray-600 mt-2">Loading activities...</p>
+                  </div>
+                ) : activities.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    No activities found for this client
+                    <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p className="font-medium">No activities recorded yet</p>
+                    <p className="text-sm">Start by adding an activity above to track your client interactions.</p>
                   </div>
                 ) : (
-                  activities.map((activity: any) => (
-                    <Card key={activity.id}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex-shrink-0 mt-1">
-                            {activity.activity_type === "call" && <Phone className="h-4 w-4 text-green-500" />}
-                            {activity.activity_type === "email" && <Mail className="h-4 w-4 text-blue-500" />}
-                            {activity.activity_type === "meeting" && <Calendar className="h-4 w-4 text-purple-500" />}
-                            {activity.activity_type === "note" && <User className="h-4 w-4 text-gray-500" />}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="font-medium">{activity.subject}</div>
-                              <div className="text-xs text-gray-500">
-                                {new Date(activity.created_at).toLocaleDateString()}
+                  <div className="space-y-4">
+                    {activities.map((activity: any) => (
+                      <div key={activity.id} className="border-l-4 border-blue-200 pl-4 py-3 bg-gray-50 rounded-r-lg">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2">
+                            {getActivityIcon(activity.activity_type)}
+                            <div>
+                              <div className="font-medium text-sm">{activity.subject}</div>
+                              <div className="text-xs text-gray-500 flex items-center gap-2">
+                                <User className="h-3 w-3" />
+                                {activity.employee_name} 
+                                <span>•</span>
+                                <Calendar className="h-3 w-3" />
+                                {new Date(activity.completed_at || activity.created_at).toLocaleString()}
                               </div>
                             </div>
-                            {activity.description && (
-                              <p className="text-sm text-gray-600 mb-2">{activity.description}</p>
-                            )}
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <Badge variant="outline" className="text-xs">
-                                {activity.activity_type}
-                              </Badge>
-                              {activity.employee_name && (
-                                <span>by {activity.employee_name}</span>
-                              )}
-                            </div>
                           </div>
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {activity.activity_type.replace('_', ' ')}
+                          </Badge>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                        {activity.description && (
+                          <div className="text-sm text-gray-700 mt-2 pl-6">
+                            {activity.description}
+                          </div>
+                        )}
+                        {activity.outcome && (
+                          <div className="text-xs text-gray-500 mt-1 pl-6">
+                            <strong>Outcome:</strong> {activity.outcome}
+                          </div>
+                        )}
+                        {activity.next_action && (
+                          <div className="text-xs text-blue-600 mt-1 pl-6">
+                            <strong>Next Action:</strong> {activity.next_action}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </div>
-            )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </DialogContent>
