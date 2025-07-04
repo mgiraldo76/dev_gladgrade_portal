@@ -1,4 +1,4 @@
-// components/edit-client-modal.tsx - Enhanced with business_locations and FIXED to use business-sectors
+// components/edit-client-modal.tsx - Enhanced with security_level and Google Places integration
 
 "use client"
 
@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Phone, Mail, MapPin, Globe, User, Building, Users, Plus } from "lucide-react"
+import { Calendar, Phone, Mail, MapPin, Globe, User, Building, Users, Plus, Search, Star, Trash2, Edit } from "lucide-react"
 import { useAuth } from "@/app/providers"
 
 interface EditClientModalProps {
@@ -29,6 +29,24 @@ interface EditClientModalProps {
   client: any
   onSuccess: () => void
   userRole: string
+}
+
+interface GooglePlace {
+  place_id: string
+  name: string
+  formatted_address: string
+  business_status: string
+  rating?: number
+  user_ratings_total?: number
+  types: string[]
+  geometry: {
+    location: { lat: number; lng: number }
+  }
+  address_components?: Array<{
+    long_name: string
+    short_name: string
+    types: string[]
+  }>
 }
 
 // US States dropdown data
@@ -85,6 +103,86 @@ const US_STATES = [
   { value: "WY", label: "Wyoming" },
 ]
 
+// Enhanced address component extraction
+function extractAddressComponents(place: GooglePlace) {
+  const components = {
+    street_address: "",
+    city: "",
+    state: "",
+    zip_code: "",
+    country: "US"
+  }
+
+  if (place.address_components) {
+    let streetNumber = ""
+    let route = ""
+    let subpremise = ""
+    let premise = ""
+    
+    place.address_components.forEach((component) => {
+      const types = component.types
+
+      if (types.includes("street_number")) {
+        streetNumber = component.long_name
+      }
+      if (types.includes("route")) {
+        route = component.long_name
+      }
+      if (types.includes("subpremise")) {
+        subpremise = component.long_name
+      }
+      if (types.includes("premise")) {
+        premise = component.long_name
+      }
+      if (types.includes("locality")) {
+        components.city = component.long_name
+      }
+      if (types.includes("administrative_area_level_1")) {
+        components.state = component.short_name
+      }
+      if (types.includes("postal_code")) {
+        components.zip_code = component.long_name
+      }
+      if (types.includes("country")) {
+        components.country = component.short_name
+      }
+    })
+
+    // Build complete street address
+    let addressParts = []
+    
+    if (streetNumber && route) {
+      addressParts.push(`${streetNumber} ${route}`)
+    } else if (route) {
+      addressParts.push(route)
+    }
+    
+    if (premise) {
+      addressParts.push(premise)
+    }
+    
+    if (subpremise) {
+      if (!subpremise.toLowerCase().includes('suite') && 
+          !subpremise.toLowerCase().includes('apt') && 
+          !subpremise.toLowerCase().includes('unit') &&
+          !subpremise.toLowerCase().includes('#')) {
+        if (/^\d+$/.test(subpremise) && parseInt(subpremise) > 50) {
+          subpremise = `Suite ${subpremise}`
+        } else if (/^\d+[A-Za-z]$/.test(subpremise) || parseInt(subpremise) <= 50) {
+          subpremise = `Apt ${subpremise}`
+        } else {
+          subpremise = `Unit ${subpremise}`
+        }
+      }
+      addressParts.push(subpremise)
+    }
+    
+    components.street_address = addressParts.join(', ')
+  }
+
+  return components
+}
+
 export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }: EditClientModalProps) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -92,29 +190,37 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [clientUsers, setClientUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(false)
-  // FIXED: Changed from industryCategories to businessSectors
   const [businessSectors, setBusinessSectors] = useState([])
   const [salesReps, setSalesReps] = useState([])
   const [businessLocations, setBusinessLocations] = useState([])
   const [loadingLocations, setLoadingLocations] = useState(false)
   const [isUserModalOpen, setIsUserModalOpen] = useState(false)
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
+  const [selectedLocation, setSelectedLocation] = useState<any>(null)
 
-  // Enhanced: Client form data (basic info only)
+  // Google Places integration for new locations
+  const [locationSearchQuery, setLocationSearchQuery] = useState("")
+  const [locationSearchResults, setLocationSearchResults] = useState<GooglePlace[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [selectedPlace, setSelectedPlace] = useState<GooglePlace | null>(null)
+  const [showLocationSearch, setShowLocationSearch] = useState(true)
+
+  // Enhanced: Client form data with security_level
   const [formData, setFormData] = useState({
     business_name: "",
     contact_name: "",
     contact_email: "",
     phone: "",
     website: "",
-    // FIXED: Changed from industry_category_id to business_type to match business sectors
     business_type: "",
     business_description: "",
     claim_status: "unclaimed",
+    security_level: "pending", // NEW: Security level field
     notes: "",
     sales_rep_id: "",
   })
 
-  // NEW: Primary location form data (address components)
+  // Location form data
   const [locationData, setLocationData] = useState({
     id: null as number | null,
     location_name: "",
@@ -126,6 +232,8 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     phone: "",
     manager_name: "",
     manager_email: "",
+    is_primary: false,
+    place_id: "", // NEW: Place ID field
   })
 
   const [newUser, setNewUser] = useState({
@@ -135,7 +243,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     temporary_password: "",
   })
 
-  // ENHANCED: Initialize form data and load business locations
+  // Initialize form data and load business locations
   useEffect(() => {
     if (client) {
       console.log("🔍 Loading client data:", client)
@@ -145,14 +253,13 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         contact_email: client.contact_email || "",
         phone: client.phone || "",
         website: client.website || "",
-        // FIXED: Map from industry_category_name (from API) to business_type (for form)
         business_type: client.industry_category_name || "",
         business_description: client.business_description || "",
         claim_status: client.claim_status || "unclaimed",
+        security_level: client.security_level || "pending", // NEW: Load security level
         notes: client.notes || "",
         sales_rep_id: client.sales_rep_id ? client.sales_rep_id.toString() : "unassigned",
       })
-      // FIXED: Changed function name
       loadBusinessSectors()
       loadSalesReps()
       loadClientUsers()
@@ -161,7 +268,6 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   }, [client])
 
-  // FIXED: Changed from loadIndustryCategories to loadBusinessSectors and updated endpoint
   const loadBusinessSectors = async () => {
     try {
       const response = await fetch("/api/business-sectors")
@@ -239,7 +345,6 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   }
 
-  // NEW: Load business locations
   const loadBusinessLocations = async () => {
     if (!client?.id) return
 
@@ -253,25 +358,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
       const response = await fetch(`/api/clients/${client.id}/locations`, { headers })
       if (response.ok) {
         const data = await response.json()
-        const locations = data.data || []
-        setBusinessLocations(locations)
-        
-        // Load primary location data
-        const primaryLocation = locations.find((loc: any) => loc.is_primary) || locations[0]
-        if (primaryLocation) {
-          setLocationData({
-            id: primaryLocation.id,
-            location_name: primaryLocation.location_name || "",
-            address: primaryLocation.address || "",
-            city: primaryLocation.city || "",
-            state: primaryLocation.state || "",
-            country: primaryLocation.country || "USA",
-            postal_code: primaryLocation.postal_code || "",
-            phone: primaryLocation.phone || "",
-            manager_name: primaryLocation.manager_name || "",
-            manager_email: primaryLocation.manager_email || "",
-          })
-        }
+        setBusinessLocations(data.data || [])
       }
     } catch (error) {
       console.error("Error loading business locations:", error)
@@ -280,11 +367,157 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   }
 
+  // Google Places search for locations
+  const handleLocationSearch = async () => {
+    if (!locationSearchQuery.trim()) return
+
+    setSearchLoading(true)
+    try {
+      const response = await fetch(
+        `/api/clients/search-places?query=${encodeURIComponent(locationSearchQuery)}&location=Miami, FL`,
+      )
+      const data = await response.json()
+
+      if (data.success) {
+        setLocationSearchResults(data.data || [])
+      } else {
+        console.error("Search failed:", data.error)
+        setLocationSearchResults([])
+      }
+    } catch (error) {
+      console.error("Search error:", error)
+      setLocationSearchResults([])
+    } finally {
+      setSearchLoading(false)
+    }
+  }
+
+  const handlePlaceSelect = (place: GooglePlace) => {
+    setSelectedPlace(place)
+    
+    const addressComponents = extractAddressComponents(place)
+    
+    setLocationData((prev) => ({
+      ...prev,
+      location_name: place.name,
+      place_id: place.place_id,
+      address: addressComponents.street_address,
+      city: addressComponents.city,
+      state: addressComponents.state,
+      postal_code: addressComponents.zip_code,
+      country: addressComponents.country,
+    }))
+    setShowLocationSearch(false)
+  }
+
+  const handleLocationEdit = (location: any) => {
+    setSelectedLocation(location)
+    setLocationData({
+      id: location.id,
+      location_name: location.location_name || "",
+      address: location.address || "",
+      city: location.city || "",
+      state: location.state || "",
+      country: location.country || "USA",
+      postal_code: location.postal_code || "",
+      phone: location.phone || "",
+      manager_name: location.manager_name || "",
+      manager_email: location.manager_email || "",
+      is_primary: location.is_primary || false,
+      place_id: location.place_id || "",
+    })
+    setIsLocationModalOpen(true)
+  }
+
+  const handleLocationSave = async () => {
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      const endpoint = selectedLocation 
+        ? `/api/clients/${client.id}/locations/${selectedLocation.id}`
+        : `/api/clients/${client.id}/locations`
+
+      const method = selectedLocation ? "PUT" : "POST"
+
+      const response = await fetch(endpoint, {
+        method,
+        headers,
+        body: JSON.stringify(locationData),
+      })
+
+      if (response.ok) {
+        loadBusinessLocations()
+        setIsLocationModalOpen(false)
+        resetLocationForm()
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to save location: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error("Error saving location:", error)
+      alert("Error saving location")
+    }
+  }
+
+  const handleLocationDelete = async (locationId: number) => {
+    if (!confirm("Are you sure you want to delete this location?")) return
+
+    try {
+      const headers: Record<string, string> = {}
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      const response = await fetch(`/api/clients/${client.id}/locations/${locationId}`, {
+        method: "DELETE",
+        headers,
+      })
+
+      if (response.ok) {
+        loadBusinessLocations()
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to delete location: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error("Error deleting location:", error)
+      alert("Error deleting location")
+    }
+  }
+
+  const resetLocationForm = () => {
+    setSelectedLocation(null)
+    setLocationData({
+      id: null,
+      location_name: "",
+      address: "",
+      city: "",
+      state: "",
+      country: "USA",
+      postal_code: "",
+      phone: "",
+      manager_name: "",
+      manager_email: "",
+      is_primary: false,
+      place_id: "",
+    })
+    setSelectedPlace(null)
+    setLocationSearchQuery("")
+    setLocationSearchResults([])
+    setShowLocationSearch(true)
+  }
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleLocationChange = (field: string, value: string) => {
+  const handleLocationChange = (field: string, value: string | boolean) => {
     setLocationData((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -301,7 +534,6 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         headers["x-user-email"] = user.email
       }
 
-      // FIXED: Need to find the business sector ID based on the selected business_type name
       const selectedSector = businessSectors.find((sector: any) => 
         sector.businesssectorname === formData.business_type
       )
@@ -312,10 +544,9 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         contact_email: formData.contact_email,
         phone: formData.phone,
         website: formData.website,
-        // FIXED: Map business_type back to industry_category_id for database storage
-        // Note: This assumes your backend can handle business sector name lookup
         business_type: formData.business_type,
         claim_status: formData.claim_status,
+        security_level: formData.security_level, // NEW: Include security level
         sales_rep_id: formData.sales_rep_id && formData.sales_rep_id !== "unassigned" ? parseInt(formData.sales_rep_id) : null,
       }
 
@@ -326,32 +557,6 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
       })
 
       if (response.ok) {
-        // Update business location if data changed
-        if (locationData.id && (
-          locationData.address || locationData.city || locationData.state || 
-          locationData.postal_code || locationData.phone
-        )) {
-          const locationResponse = await fetch(`/api/clients/${client.id}/locations/${locationData.id}`, {
-            method: "PUT",
-            headers,
-            body: JSON.stringify({
-              location_name: locationData.location_name,
-              address: locationData.address,
-              city: locationData.city,
-              state: locationData.state,
-              country: locationData.country,
-              postal_code: locationData.postal_code,
-              phone: locationData.phone,
-              manager_name: locationData.manager_name,
-              manager_email: locationData.manager_email,
-            }),
-          })
-          
-          if (!locationResponse.ok) {
-            console.warn("⚠️ Failed to update business location, but client update succeeded")
-          }
-        }
-
         onSuccess()
         onClose()
       } else {
@@ -415,6 +620,11 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
             {client.business_name}
             <Badge variant={client.claim_status === "verified" ? "default" : "secondary"}>
               {client.claim_status === "verified" ? "Verified" : client.claim_status || "Unclaimed"}
+            </Badge>
+            {/* NEW: Security Level Badge */}
+            <Badge variant={client.security_level === "verified" ? "default" : 
+                           client.security_level === "flagged" ? "destructive" : "secondary"}>
+              {client.security_level || "Pending"}
             </Badge>
           </DialogTitle>
           <DialogDescription>
@@ -483,7 +693,6 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                   />
                 </div>
                 <div className="space-y-2">
-                  {/* FIXED: Changed from industry_category_id to business_type and updated to use businessSectors */}
                   <Label htmlFor="business_type">Industry</Label>
                   <Select
                     value={formData.business_type || undefined}
@@ -505,7 +714,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="claim_status">Claim Status</Label>
                   <Select
@@ -521,6 +730,24 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                       <SelectItem value="claimed">Claimed</SelectItem>
                       <SelectItem value="verified">Verified</SelectItem>
                       <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* NEW: Security Level Field */}
+                <div className="space-y-2">
+                  <Label htmlFor="security_level">Security Level</Label>
+                  <Select
+                    value={formData.security_level}
+                    onValueChange={(value) => handleInputChange("security_level", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="verified">Verified</SelectItem>
+                      <SelectItem value="flagged">Flagged</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -579,7 +806,10 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
           <TabsContent value="locations" className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium">Business Locations</h3>
-              <Button size="sm">
+              <Button size="sm" onClick={() => {
+                resetLocationForm()
+                setIsLocationModalOpen(true)
+              }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Location
               </Button>
@@ -589,19 +819,165 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
               <div className="text-center py-4">Loading locations...</div>
             ) : (
               <div className="space-y-4">
-                {/* Primary Location Form */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Primary Location</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                {businessLocations.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <MapPin className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No locations found</h3>
+                    <p className="text-gray-600 mb-4">Add your first business location to get started.</p>
+                    <Button onClick={() => {
+                      resetLocationForm()
+                      setIsLocationModalOpen(true)
+                    }}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add First Location
+                    </Button>
+                  </div>
+                ) : (
+                  businessLocations.map((location: any) => (
+                    <Card key={location.id} className={location.is_primary ? "border-blue-500" : ""}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-medium">{location.location_name}</h4>
+                              {location.is_primary && (
+                                <Badge variant="default" className="text-xs">Primary</Badge>
+                              )}
+                              <Badge variant="outline" className="text-xs">{location.status}</Badge>
+                            </div>
+                            <div className="text-sm text-gray-600 space-y-1">
+                              <div className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {location.address}
+                              </div>
+                              <div>{location.city}, {location.state} {location.postal_code}</div>
+                              {location.phone && <div>📞 {location.phone}</div>}
+                              {location.manager_name && <div>👤 Manager: {location.manager_name}</div>}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleLocationEdit(location)}
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            {!location.is_primary && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleLocationDelete(location.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Location Modal */}
+            <Dialog open={isLocationModalOpen} onOpenChange={setIsLocationModalOpen}>
+              <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {selectedLocation ? "Edit Location" : "Add New Location"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {selectedLocation 
+                      ? "Update location information" 
+                      : "Search for a business or enter details manually to add a new location."
+                    }
+                  </DialogDescription>
+                </DialogHeader>
+
+                {!selectedLocation && showLocationSearch ? (
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Search for business location (e.g., 'Miami Beach Restaurant')"
+                        value={locationSearchQuery}
+                        onChange={(e) => setLocationSearchQuery(e.target.value)}
+                        onKeyPress={(e) => e.key === "Enter" && handleLocationSearch()}
+                      />
+                      <Button onClick={handleLocationSearch} disabled={searchLoading}>
+                        <Search className="h-4 w-4" />
+                        {searchLoading ? "Searching..." : "Search"}
+                      </Button>
+                    </div>
+
+                    {locationSearchResults.length > 0 && (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        <Label>Search Results:</Label>
+                        {locationSearchResults.map((place) => (
+                          <Card
+                            key={place.place_id}
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => handlePlaceSelect(place)}
+                          >
+                            <CardContent className="p-3">
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <h4 className="font-medium">{place.name}</h4>
+                                  <div className="flex items-center text-sm text-gray-600 mt-1">
+                                    <MapPin className="h-3 w-3 mr-1" />
+                                    {place.formatted_address}
+                                  </div>
+                                  {place.rating && (
+                                    <div className="flex items-center text-sm text-gray-600 mt-1">
+                                      <Star className="h-3 w-3 mr-1 fill-yellow-400 text-yellow-400" />
+                                      {place.rating} ({place.user_ratings_total} reviews)
+                                    </div>
+                                  )}
+                                  <div className="text-xs text-gray-500 mt-1">{place.types.slice(0, 3).join(", ")}</div>
+                                </div>
+                                <div className="text-xs text-gray-500">{place.business_status}</div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex justify-center">
+                      <Button variant="outline" onClick={() => setShowLocationSearch(false)}>
+                        Enter Location Details Manually
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {selectedPlace && (
+                      <Card className="bg-green-50 border-green-200">
+                        <CardContent className="p-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-medium text-green-800">Selected Location:</h4>
+                              <p className="text-green-700">{selectedPlace.name}</p>
+                              <p className="text-sm text-green-600">{selectedPlace.formatted_address}</p>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => setShowLocationSearch(true)}>
+                              Change
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="location_name">Location Name</Label>
+                        <Label htmlFor="location_name">Location Name *</Label>
                         <Input
                           id="location_name"
                           value={locationData.location_name}
                           onChange={(e) => handleLocationChange("location_name", e.target.value)}
+                          required
                         />
                       </div>
                       <div className="space-y-2">
@@ -615,21 +991,23 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="address">Address</Label>
+                      <Label htmlFor="address">Address *</Label>
                       <Input
                         id="address"
                         value={locationData.address}
                         onChange={(e) => handleLocationChange("address", e.target.value)}
+                        required
                       />
                     </div>
 
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
+                        <Label htmlFor="city">City *</Label>
                         <Input
                           id="city"
                           value={locationData.city}
                           onChange={(e) => handleLocationChange("city", e.target.value)}
+                          required
                         />
                       </div>
                       <div className="space-y-2">
@@ -679,27 +1057,38 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                         />
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
 
-                {/* Additional Locations List */}
-                {businessLocations.filter((loc: any) => !loc.is_primary).map((location: any) => (                  <Card key={location.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-medium">{location.location_name}</h4>
-                          <p className="text-sm text-gray-600">{location.address}</p>
-                          <p className="text-sm text-gray-600">
-                            {location.city}, {location.state} {location.postal_code}
-                          </p>
-                        </div>
-                        <Badge variant="outline">{location.status}</Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="is_primary"
+                        checked={locationData.is_primary}
+                        onChange={(e) => handleLocationChange("is_primary", e.target.checked)}
+                        className="rounded"
+                      />
+                      <Label htmlFor="is_primary">Set as primary location</Label>
+                    </div>
+
+                    <DialogFooter>
+                      {!selectedLocation && (
+                        <Button variant="outline" onClick={() => setShowLocationSearch(true)}>
+                          Back to Search
+                        </Button>
+                      )}
+                      <Button variant="outline" onClick={() => {
+                        setIsLocationModalOpen(false)
+                        resetLocationForm()
+                      }}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleLocationSave}>
+                        {selectedLocation ? "Update Location" : "Add Location"}
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="users" className="space-y-4">

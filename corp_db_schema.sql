@@ -1855,3 +1855,242 @@ FROM prospects p
 WHERE bc.original_prospect_id = p.id 
    AND p.place_id IS NOT NULL 
    AND bc.place_id IS NULL;
+
+
+
+
+
+
+
+   -- migration-business-locations.sql
+-- Migration script to populate business_locations from existing business_clients addresses
+
+-- First, add place_id column to business_locations if it doesn't exist
+ALTER TABLE business_locations 
+ADD COLUMN IF NOT EXISTS place_id VARCHAR(200);
+
+-- Add index for better performance on place_id lookups
+CREATE INDEX IF NOT EXISTS idx_business_locations_place_id ON business_locations(place_id);
+
+-- Add comment to document the column purpose
+COMMENT ON COLUMN business_locations.place_id IS 'Google Places ID for location verification and data enrichment';
+
+-- Step 1: Show what we're working with before migration
+SELECT 
+    'Business clients without primary locations' as category,
+    COUNT(*) as count
+FROM business_clients bc
+WHERE NOT EXISTS (
+    SELECT 1 FROM business_locations bl 
+    WHERE bl.business_client_id = bc.id AND bl.is_primary = true
+);
+
+SELECT 
+    'Total business clients' as category,
+    COUNT(*) as count
+FROM business_clients;
+
+-- Step 2: Create business_locations records for clients that don't have primary locations
+-- Only migrate clients that have address information
+INSERT INTO business_locations (
+    business_client_id,
+    location_name,
+    address,
+    city,
+    state,
+    country,
+    postal_code,
+    phone,
+    is_primary,
+    status,
+    place_id,
+    created_at,
+    updated_at
+)
+SELECT 
+    bc.id as business_client_id,
+    bc.business_name || ' - Main Location' as location_name,
+    -- Extract address components from business_address
+    CASE 
+        WHEN bc.business_address IS NOT NULL AND LENGTH(TRIM(bc.business_address)) > 0
+        THEN bc.business_address
+        ELSE 'Address not provided'
+    END as address,
+    -- Try to extract city from business_address (very basic parsing)
+    CASE 
+        WHEN bc.business_address LIKE '%,%' 
+        THEN TRIM(SPLIT_PART(bc.business_address, ',', -2))
+        ELSE 'Miami' -- Default for Florida clients
+    END as city,
+    -- Default state for GladGrade (Miami-based)
+    'FL' as state,
+    'USA' as country,
+    -- Try to extract postal code (5 digits at end)
+    CASE 
+        WHEN bc.business_address ~ '\d{5}(-\d{4})?$'
+        THEN SUBSTRING(bc.business_address FROM '\d{5}(-\d{4})?$')
+        ELSE '33101' -- Default Miami postal code
+    END as postal_code,
+    bc.phone,
+    true as is_primary, -- Set as primary location
+    'active' as status,
+    bc.place_id, -- Copy place_id from business_clients if available
+    bc.created_at,
+    NOW() as updated_at
+FROM business_clients bc
+WHERE 
+    -- Only migrate clients that don't already have a primary location
+    NOT EXISTS (
+        SELECT 1 FROM business_locations bl 
+        WHERE bl.business_client_id = bc.id AND bl.is_primary = true
+    )
+    -- Only migrate clients with some address information
+    AND (
+        bc.business_address IS NOT NULL 
+        AND LENGTH(TRIM(bc.business_address)) > 0
+    );
+
+-- Step 3: Handle clients without address information
+-- Create minimal location records for clients with no address data
+INSERT INTO business_locations (
+    business_client_id,
+    location_name,
+    address,
+    city,
+    state,
+    country,
+    postal_code,
+    phone,
+    is_primary,
+    status,
+    created_at,
+    updated_at
+)
+SELECT 
+    bc.id as business_client_id,
+    bc.business_name || ' - Main Location' as location_name,
+    'Address to be updated' as address,
+    'Miami' as city, -- Default city
+    'FL' as state,
+    'USA' as country,
+    '33101' as postal_code, -- Default postal code
+    bc.phone,
+    true as is_primary,
+    'pending' as status, -- Mark as pending since address needs updating
+    bc.created_at,
+    NOW() as updated_at
+FROM business_clients bc
+WHERE 
+    -- Only clients that still don't have a primary location
+    NOT EXISTS (
+        SELECT 1 FROM business_locations bl 
+        WHERE bl.business_client_id = bc.id AND bl.is_primary = true
+    )
+    -- And have no meaningful address information
+    AND (
+        bc.business_address IS NULL 
+        OR LENGTH(TRIM(bc.business_address)) = 0
+    );
+
+-- Step 4: Update any existing non-primary locations to ensure only one primary per client
+-- This handles edge cases where multiple primary locations might exist
+UPDATE business_locations bl1
+SET is_primary = false
+WHERE bl1.is_primary = true
+    AND EXISTS (
+        SELECT 1 FROM business_locations bl2 
+        WHERE bl2.business_client_id = bl1.business_client_id 
+            AND bl2.is_primary = true 
+            AND bl2.id < bl1.id -- Keep the first one as primary
+    );
+
+-- Step 5: Copy place_id from business_clients to business_locations where missing
+UPDATE business_locations bl
+SET 
+    place_id = bc.place_id,
+    updated_at = NOW()
+FROM business_clients bc
+WHERE bl.business_client_id = bc.id
+    AND bc.place_id IS NOT NULL
+    AND (bl.place_id IS NULL OR bl.place_id = '');
+
+-- Step 6: Show migration results
+SELECT 
+    'Migration completed successfully!' as status,
+    NOW() as completed_at;
+
+SELECT 
+    'Business locations created' as category,
+    COUNT(*) as count
+FROM business_locations;
+
+SELECT 
+    'Primary locations' as category,
+    COUNT(*) as count
+FROM business_locations
+WHERE is_primary = true;
+
+SELECT 
+    'Locations with place_id' as category,
+    COUNT(*) as count
+FROM business_locations
+WHERE place_id IS NOT NULL AND place_id != '';
+
+SELECT 
+    'Locations pending address update' as category,
+    COUNT(*) as count
+FROM business_locations
+WHERE status = 'pending';
+
+-- Step 7: Show sample of migrated data for verification
+SELECT 
+    bc.business_name,
+    bc.business_address as original_address,
+    bl.location_name,
+    bl.address as migrated_address,
+    bl.city,
+    bl.state,
+    bl.postal_code,
+    bl.is_primary,
+    bl.status,
+    CASE 
+        WHEN bl.place_id IS NOT NULL THEN 'Yes' 
+        ELSE 'No' 
+    END as has_place_id
+FROM business_clients bc
+JOIN business_locations bl ON bc.id = bl.business_client_id
+WHERE bl.is_primary = true
+ORDER BY bc.business_name
+LIMIT 20;
+
+-- Step 8: Identify clients that may need manual address cleanup
+SELECT 
+    'Clients needing manual address review:' as info;
+
+SELECT 
+    bc.id,
+    bc.business_name,
+    bc.business_address as original_address,
+    bl.address as migrated_address,
+    bl.status
+FROM business_clients bc
+JOIN business_locations bl ON bc.id = bl.business_client_id
+WHERE bl.is_primary = true
+    AND (
+        bl.status = 'pending' 
+        OR bl.address = 'Address not provided'
+        OR bl.address = 'Address to be updated'
+        OR bl.city = 'Miami' AND bc.business_address NOT LIKE '%Miami%'
+    )
+ORDER BY bc.business_name;
+
+-- Success message with summary
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Business Locations Migration Completed Successfully!';
+    RAISE NOTICE '📊 All business clients now have primary location records';
+    RAISE NOTICE '🗺️ Address data migrated from business_clients.business_address';
+    RAISE NOTICE '🔍 Place IDs copied where available';
+    RAISE NOTICE '⚠️ Some locations marked as pending may need manual address updates';
+    RAISE NOTICE '🎯 Ready for enhanced location management in edit modal';
+END $$;
