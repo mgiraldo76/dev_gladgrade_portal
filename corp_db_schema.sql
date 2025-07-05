@@ -1855,3 +1855,667 @@ FROM prospects p
 WHERE bc.original_prospect_id = p.id 
    AND p.place_id IS NOT NULL 
    AND bc.place_id IS NULL;
+
+
+
+
+
+
+
+   -- migration-business-locations.sql
+-- Migration script to populate business_locations from existing business_clients addresses
+
+-- First, add place_id column to business_locations if it doesn't exist
+ALTER TABLE business_locations 
+ADD COLUMN IF NOT EXISTS place_id VARCHAR(200);
+
+-- Add index for better performance on place_id lookups
+CREATE INDEX IF NOT EXISTS idx_business_locations_place_id ON business_locations(place_id);
+
+-- Add comment to document the column purpose
+COMMENT ON COLUMN business_locations.place_id IS 'Google Places ID for location verification and data enrichment';
+
+-- Step 1: Show what we're working with before migration
+SELECT 
+    'Business clients without primary locations' as category,
+    COUNT(*) as count
+FROM business_clients bc
+WHERE NOT EXISTS (
+    SELECT 1 FROM business_locations bl 
+    WHERE bl.business_client_id = bc.id AND bl.is_primary = true
+);
+
+SELECT 
+    'Total business clients' as category,
+    COUNT(*) as count
+FROM business_clients;
+
+-- Step 2: Create business_locations records for clients that don't have primary locations
+-- Only migrate clients that have address information
+INSERT INTO business_locations (
+    business_client_id,
+    location_name,
+    address,
+    city,
+    state,
+    country,
+    postal_code,
+    phone,
+    is_primary,
+    status,
+    place_id,
+    created_at,
+    updated_at
+)
+SELECT 
+    bc.id as business_client_id,
+    bc.business_name || ' - Main Location' as location_name,
+    -- Extract address components from business_address
+    CASE 
+        WHEN bc.business_address IS NOT NULL AND LENGTH(TRIM(bc.business_address)) > 0
+        THEN bc.business_address
+        ELSE 'Address not provided'
+    END as address,
+    -- Try to extract city from business_address (very basic parsing)
+    CASE 
+        WHEN bc.business_address LIKE '%,%' 
+        THEN TRIM(SPLIT_PART(bc.business_address, ',', -2))
+        ELSE 'Miami' -- Default for Florida clients
+    END as city,
+    -- Default state for GladGrade (Miami-based)
+    'FL' as state,
+    'USA' as country,
+    -- Try to extract postal code (5 digits at end)
+    CASE 
+        WHEN bc.business_address ~ '\d{5}(-\d{4})?$'
+        THEN SUBSTRING(bc.business_address FROM '\d{5}(-\d{4})?$')
+        ELSE '33101' -- Default Miami postal code
+    END as postal_code,
+    bc.phone,
+    true as is_primary, -- Set as primary location
+    'active' as status,
+    bc.place_id, -- Copy place_id from business_clients if available
+    bc.created_at,
+    NOW() as updated_at
+FROM business_clients bc
+WHERE 
+    -- Only migrate clients that don't already have a primary location
+    NOT EXISTS (
+        SELECT 1 FROM business_locations bl 
+        WHERE bl.business_client_id = bc.id AND bl.is_primary = true
+    )
+    -- Only migrate clients with some address information
+    AND (
+        bc.business_address IS NOT NULL 
+        AND LENGTH(TRIM(bc.business_address)) > 0
+    );
+
+-- Step 3: Handle clients without address information
+-- Create minimal location records for clients with no address data
+INSERT INTO business_locations (
+    business_client_id,
+    location_name,
+    address,
+    city,
+    state,
+    country,
+    postal_code,
+    phone,
+    is_primary,
+    status,
+    created_at,
+    updated_at
+)
+SELECT 
+    bc.id as business_client_id,
+    bc.business_name || ' - Main Location' as location_name,
+    'Address to be updated' as address,
+    'Miami' as city, -- Default city
+    'FL' as state,
+    'USA' as country,
+    '33101' as postal_code, -- Default postal code
+    bc.phone,
+    true as is_primary,
+    'pending' as status, -- Mark as pending since address needs updating
+    bc.created_at,
+    NOW() as updated_at
+FROM business_clients bc
+WHERE 
+    -- Only clients that still don't have a primary location
+    NOT EXISTS (
+        SELECT 1 FROM business_locations bl 
+        WHERE bl.business_client_id = bc.id AND bl.is_primary = true
+    )
+    -- And have no meaningful address information
+    AND (
+        bc.business_address IS NULL 
+        OR LENGTH(TRIM(bc.business_address)) = 0
+    );
+
+-- Step 4: Update any existing non-primary locations to ensure only one primary per client
+-- This handles edge cases where multiple primary locations might exist
+UPDATE business_locations bl1
+SET is_primary = false
+WHERE bl1.is_primary = true
+    AND EXISTS (
+        SELECT 1 FROM business_locations bl2 
+        WHERE bl2.business_client_id = bl1.business_client_id 
+            AND bl2.is_primary = true 
+            AND bl2.id < bl1.id -- Keep the first one as primary
+    );
+
+-- Step 5: Copy place_id from business_clients to business_locations where missing
+UPDATE business_locations bl
+SET 
+    place_id = bc.place_id,
+    updated_at = NOW()
+FROM business_clients bc
+WHERE bl.business_client_id = bc.id
+    AND bc.place_id IS NOT NULL
+    AND (bl.place_id IS NULL OR bl.place_id = '');
+
+-- Step 6: Show migration results
+SELECT 
+    'Migration completed successfully!' as status,
+    NOW() as completed_at;
+
+SELECT 
+    'Business locations created' as category,
+    COUNT(*) as count
+FROM business_locations;
+
+SELECT 
+    'Primary locations' as category,
+    COUNT(*) as count
+FROM business_locations
+WHERE is_primary = true;
+
+SELECT 
+    'Locations with place_id' as category,
+    COUNT(*) as count
+FROM business_locations
+WHERE place_id IS NOT NULL AND place_id != '';
+
+SELECT 
+    'Locations pending address update' as category,
+    COUNT(*) as count
+FROM business_locations
+WHERE status = 'pending';
+
+-- Step 7: Show sample of migrated data for verification
+SELECT 
+    bc.business_name,
+    bc.business_address as original_address,
+    bl.location_name,
+    bl.address as migrated_address,
+    bl.city,
+    bl.state,
+    bl.postal_code,
+    bl.is_primary,
+    bl.status,
+    CASE 
+        WHEN bl.place_id IS NOT NULL THEN 'Yes' 
+        ELSE 'No' 
+    END as has_place_id
+FROM business_clients bc
+JOIN business_locations bl ON bc.id = bl.business_client_id
+WHERE bl.is_primary = true
+ORDER BY bc.business_name
+LIMIT 20;
+
+-- Step 8: Identify clients that may need manual address cleanup
+SELECT 
+    'Clients needing manual address review:' as info;
+
+SELECT 
+    bc.id,
+    bc.business_name,
+    bc.business_address as original_address,
+    bl.address as migrated_address,
+    bl.status
+FROM business_clients bc
+JOIN business_locations bl ON bc.id = bl.business_client_id
+WHERE bl.is_primary = true
+    AND (
+        bl.status = 'pending' 
+        OR bl.address = 'Address not provided'
+        OR bl.address = 'Address to be updated'
+        OR bl.city = 'Miami' AND bc.business_address NOT LIKE '%Miami%'
+    )
+ORDER BY bc.business_name;
+
+-- Success message with summary
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Business Locations Migration Completed Successfully!';
+    RAISE NOTICE '📊 All business clients now have primary location records';
+    RAISE NOTICE '🗺️ Address data migrated from business_clients.business_address';
+    RAISE NOTICE '🔍 Place IDs copied where available';
+    RAISE NOTICE '⚠️ Some locations marked as pending may need manual address updates';
+    RAISE NOTICE '🎯 Ready for enhanced location management in edit modal';
+END $$;
+
+
+
+
+
+
+
+
+
+-- client-portal-users-schema.sql
+-- Database schema for client portal users system
+
+-- Create client_portal_users table
+CREATE TABLE IF NOT EXISTS client_portal_users (
+    id SERIAL PRIMARY KEY,
+    business_client_id INTEGER REFERENCES business_clients(id) ON DELETE CASCADE,
+    firebase_uid VARCHAR(255) UNIQUE,
+    email VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    
+    -- Role within the client organization
+    role VARCHAR(50) DEFAULT 'client_user' CHECK (role IN ('client_admin', 'client_moderator', 'client_user', 'client_viewer')),
+    
+    -- Status and access control
+    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'pending')),
+    is_email_verified BOOLEAN DEFAULT FALSE,
+    last_login TIMESTAMP,
+    
+    -- Password management
+    temporary_password VARCHAR(255), -- Store temporarily for sharing with creator
+    password_reset_required BOOLEAN DEFAULT TRUE,
+    password_reset_token VARCHAR(255),
+    password_reset_expires TIMESTAMP,
+    
+    -- Audit trail
+    created_by INTEGER REFERENCES employees(id), -- GladGrade employee who created this user
+    created_by_client_user INTEGER REFERENCES client_portal_users(id), -- Or client admin who created this user
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    updated_by INTEGER REFERENCES employees(id),
+    
+    -- Contact preferences
+    email_notifications BOOLEAN DEFAULT TRUE,
+    sms_notifications BOOLEAN DEFAULT FALSE,
+    marketing_consent BOOLEAN DEFAULT FALSE,
+    
+    -- Additional metadata
+    notes TEXT, -- Internal notes about the user
+    timezone VARCHAR(50) DEFAULT 'America/New_York',
+    language VARCHAR(10) DEFAULT 'en',
+    
+    -- Constraints
+    CONSTRAINT unique_email_per_business UNIQUE(business_client_id, email),
+    CONSTRAINT check_creator_logic CHECK (
+        (created_by IS NOT NULL AND created_by_client_user IS NULL) OR 
+        (created_by IS NULL AND created_by_client_user IS NOT NULL)
+    )
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_client_portal_users_business_id ON client_portal_users(business_client_id);
+CREATE INDEX IF NOT EXISTS idx_client_portal_users_firebase_uid ON client_portal_users(firebase_uid);
+CREATE INDEX IF NOT EXISTS idx_client_portal_users_email ON client_portal_users(email);
+CREATE INDEX IF NOT EXISTS idx_client_portal_users_status ON client_portal_users(status);
+CREATE INDEX IF NOT EXISTS idx_client_portal_users_role ON client_portal_users(role);
+CREATE INDEX IF NOT EXISTS idx_client_portal_users_last_login ON client_portal_users(last_login);
+
+-- Create client_user_activities table for tracking user actions
+CREATE TABLE IF NOT EXISTS client_user_activities (
+    id SERIAL PRIMARY KEY,
+    client_user_id INTEGER REFERENCES client_portal_users(id) ON DELETE CASCADE,
+    business_client_id INTEGER REFERENCES business_clients(id) ON DELETE CASCADE,
+    
+    -- Activity details
+    activity_type VARCHAR(50) NOT NULL, -- 'login', 'logout', 'password_change', 'profile_update', 'report_view', 'review_action'
+    activity_description TEXT,
+    activity_metadata JSONB, -- Store additional data like IP, browser, etc.
+    
+    -- System information
+    ip_address INET,
+    user_agent TEXT,
+    session_id VARCHAR(255),
+    
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_user_activities_user_id ON client_user_activities(client_user_id);
+CREATE INDEX IF NOT EXISTS idx_client_user_activities_business_id ON client_user_activities(business_client_id);
+CREATE INDEX IF NOT EXISTS idx_client_user_activities_type ON client_user_activities(activity_type);
+CREATE INDEX IF NOT EXISTS idx_client_user_activities_created_at ON client_user_activities(created_at);
+
+-- Create client_user_permissions table for granular permissions
+CREATE TABLE IF NOT EXISTS client_user_permissions (
+    id SERIAL PRIMARY KEY,
+    client_user_id INTEGER REFERENCES client_portal_users(id) ON DELETE CASCADE,
+    permission_name VARCHAR(100) NOT NULL,
+    granted_by INTEGER REFERENCES employees(id),
+    granted_by_client_user INTEGER REFERENCES client_portal_users(id),
+    granted_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP, -- Optional expiration
+    
+    UNIQUE(client_user_id, permission_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_user_permissions_user_id ON client_user_permissions(client_user_id);
+CREATE INDEX IF NOT EXISTS idx_client_user_permissions_permission ON client_user_permissions(permission_name);
+
+-- Insert default permissions for client users
+INSERT INTO permissions (name, description) VALUES
+    ('client_view_dashboard', 'View client dashboard and basic reports'),
+    ('client_view_reports', 'View detailed analytics and reports'),
+    ('client_manage_reviews', 'Respond to and moderate reviews'),
+    ('client_purchase_services', 'Purchase additional services and ads'),
+    ('client_manage_users', 'Add, edit, and remove client portal users'),
+    ('client_manage_profile', 'Edit business profile and settings'),
+    ('client_view_billing', 'View billing information and invoices'),
+    ('client_manage_billing', 'Update payment methods and billing info'),
+    ('client_api_access', 'Access to client API endpoints'),
+    ('client_export_data', 'Export reports and data')
+ON CONFLICT (name) DO NOTHING;
+
+-- Create function to assign default permissions based on role
+CREATE OR REPLACE FUNCTION assign_default_client_permissions(user_id INTEGER, user_role VARCHAR(50))
+RETURNS VOID AS $$
+BEGIN
+    -- Clear existing permissions
+    DELETE FROM client_user_permissions WHERE client_user_id = user_id;
+    
+    -- Assign permissions based on role
+    CASE user_role
+        WHEN 'client_admin' THEN
+            INSERT INTO client_user_permissions (client_user_id, permission_name) VALUES
+                (user_id, 'client_view_dashboard'),
+                (user_id, 'client_view_reports'),
+                (user_id, 'client_manage_reviews'),
+                (user_id, 'client_purchase_services'),
+                (user_id, 'client_manage_users'),
+                (user_id, 'client_manage_profile'),
+                (user_id, 'client_view_billing'),
+                (user_id, 'client_manage_billing'),
+                (user_id, 'client_api_access'),
+                (user_id, 'client_export_data');
+        
+        WHEN 'client_moderator' THEN
+            INSERT INTO client_user_permissions (client_user_id, permission_name) VALUES
+                (user_id, 'client_view_dashboard'),
+                (user_id, 'client_view_reports'),
+                (user_id, 'client_manage_reviews'),
+                (user_id, 'client_purchase_services'),
+                (user_id, 'client_manage_profile'),
+                (user_id, 'client_view_billing'),
+                (user_id, 'client_export_data');
+        
+        WHEN 'client_user' THEN
+            INSERT INTO client_user_permissions (client_user_id, permission_name) VALUES
+                (user_id, 'client_view_dashboard'),
+                (user_id, 'client_view_reports'),
+                (user_id, 'client_purchase_services'),
+                (user_id, 'client_manage_profile'),
+                (user_id, 'client_view_billing');
+        
+        WHEN 'client_viewer' THEN
+            INSERT INTO client_user_permissions (client_user_id, permission_name) VALUES
+                (user_id, 'client_view_dashboard'),
+                (user_id, 'client_view_reports');
+        
+        ELSE
+            -- Default to viewer permissions
+            INSERT INTO client_user_permissions (client_user_id, permission_name) VALUES
+                (user_id, 'client_view_dashboard'),
+                (user_id, 'client_view_reports');
+    END CASE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to assign permissions when user is created or role changes
+CREATE OR REPLACE FUNCTION trigger_assign_client_permissions()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Assign default permissions based on role
+    PERFORM assign_default_client_permissions(NEW.id, NEW.role);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER client_user_permissions_trigger
+    AFTER INSERT OR UPDATE OF role ON client_portal_users
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_assign_client_permissions();
+
+-- Create updated_at trigger for client_portal_users
+CREATE OR REPLACE FUNCTION update_client_user_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER client_portal_users_updated_at
+    BEFORE UPDATE ON client_portal_users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_client_user_updated_at();
+
+-- Create view for client user details with business info
+CREATE OR REPLACE VIEW client_users_detailed AS
+SELECT 
+    cpu.id,
+    cpu.business_client_id,
+    cpu.firebase_uid,
+    cpu.email,
+    cpu.full_name,
+    cpu.role,
+    cpu.status,
+    cpu.is_email_verified,
+    cpu.last_login,
+    cpu.created_at,
+    cpu.updated_at,
+    
+    -- Business information
+    bc.business_name,
+    bc.contact_name as business_contact_name,
+    bc.contact_email as business_contact_email,
+    
+    -- Creator information
+    CASE 
+        WHEN cpu.created_by IS NOT NULL THEN e.full_name
+        WHEN cpu.created_by_client_user IS NOT NULL THEN cpu2.full_name
+        ELSE 'System'
+    END as created_by_name,
+    
+    CASE 
+        WHEN cpu.created_by IS NOT NULL THEN 'GladGrade Employee'
+        WHEN cpu.created_by_client_user IS NOT NULL THEN 'Client Admin'
+        ELSE 'System'
+    END as created_by_type,
+    
+    -- Permission count
+    (SELECT COUNT(*) FROM client_user_permissions WHERE client_user_id = cpu.id) as permission_count
+    
+FROM client_portal_users cpu
+LEFT JOIN business_clients bc ON cpu.business_client_id = bc.id
+LEFT JOIN employees e ON cpu.created_by = e.id
+LEFT JOIN client_portal_users cpu2 ON cpu.created_by_client_user = cpu2.id;
+
+-- Show summary of what was created
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Client Portal Users Schema Created Successfully!';
+    RAISE NOTICE '📊 Tables: client_portal_users, client_user_activities, client_user_permissions';
+    RAISE NOTICE '🔐 Permissions: 10 default client permissions added';
+    RAISE NOTICE '⚙️ Functions: assign_default_client_permissions, triggers for auto-permissions';
+    RAISE NOTICE '👁️ Views: client_users_detailed for comprehensive user info';
+    RAISE NOTICE '📈 Indexes: Performance indexes on all key fields';
+END $$;
+
+
+
+
+
+
+-- client-activities-schema.sql
+-- Database schema for client activities (identical to sales_activities but for clients)
+
+-- Create client_activities table (mirrors sales_activities structure)
+CREATE TABLE IF NOT EXISTS client_activities (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER REFERENCES business_clients(id) ON DELETE CASCADE,
+    employee_id INTEGER REFERENCES employees(id),
+    activity_type VARCHAR(50) NOT NULL, -- 'call', 'email', 'meeting', 'note', 'follow_up', 'proposal', 'contract', 'payment', 'support'
+    subject VARCHAR(300) NOT NULL,
+    description TEXT,
+    outcome VARCHAR(100), -- 'positive', 'neutral', 'negative', 'no_response', 'completed', 'pending'
+    next_action VARCHAR(300),
+    scheduled_for TIMESTAMP,
+    completed_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW(),
+    
+    -- Additional metadata
+    priority VARCHAR(20) DEFAULT 'medium', -- 'low', 'medium', 'high', 'urgent'
+    activity_metadata JSONB, -- Store additional data like call duration, email thread ID, etc.
+    
+    -- System information
+    ip_address INET,
+    user_agent TEXT,
+    
+    CONSTRAINT check_activity_type CHECK (activity_type IN (
+        'call', 'email', 'meeting', 'note', 'follow_up', 'proposal', 
+        'contract', 'payment', 'support', 'training', 'review', 'billing'
+    )),
+    CONSTRAINT check_outcome CHECK (outcome IN (
+        'positive', 'neutral', 'negative', 'no_response', 'completed', 
+        'pending', 'cancelled', 'rescheduled'
+    )),
+    CONSTRAINT check_priority CHECK (priority IN ('low', 'medium', 'high', 'urgent'))
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_client_activities_client_id ON client_activities(client_id);
+CREATE INDEX IF NOT EXISTS idx_client_activities_employee_id ON client_activities(employee_id);
+CREATE INDEX IF NOT EXISTS idx_client_activities_type ON client_activities(activity_type);
+CREATE INDEX IF NOT EXISTS idx_client_activities_completed_at ON client_activities(completed_at);
+CREATE INDEX IF NOT EXISTS idx_client_activities_created_at ON client_activities(created_at);
+CREATE INDEX IF NOT EXISTS idx_client_activities_scheduled_for ON client_activities(scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_client_activities_priority ON client_activities(priority);
+
+-- Create client_activity_attachments table for file attachments
+CREATE TABLE IF NOT EXISTS client_activity_attachments (
+    id SERIAL PRIMARY KEY,
+    activity_id INTEGER REFERENCES client_activities(id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size INTEGER,
+    file_type VARCHAR(100),
+    uploaded_by INTEGER REFERENCES employees(id),
+    uploaded_at TIMESTAMP DEFAULT NOW(),
+    
+    CONSTRAINT check_file_size CHECK (file_size >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_activity_attachments_activity_id ON client_activity_attachments(activity_id);
+CREATE INDEX IF NOT EXISTS idx_client_activity_attachments_uploaded_by ON client_activity_attachments(uploaded_by);
+
+-- Create function to automatically update client's last activity timestamp
+-- Create function to automatically update client's last activity timestamp
+CREATE OR REPLACE FUNCTION update_client_last_activity()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Update the client's last activity timestamp
+    UPDATE business_clients 
+    SET updated_at = NOW() 
+    WHERE id = NEW.client_id;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to update client last activity
+CREATE TRIGGER client_activity_update_trigger
+    AFTER INSERT ON client_activities
+    FOR EACH ROW
+    EXECUTE FUNCTION update_client_last_activity();
+
+-- Create view for activity summary by client
+CREATE OR REPLACE VIEW client_activity_summary AS
+SELECT 
+    c.id as client_id,
+    c.business_name,
+    COUNT(ca.id) as total_activities,
+    COUNT(CASE WHEN ca.activity_type = 'call' THEN 1 END) as total_calls,
+    COUNT(CASE WHEN ca.activity_type = 'email' THEN 1 END) as total_emails,
+    COUNT(CASE WHEN ca.activity_type = 'meeting' THEN 1 END) as total_meetings,
+    COUNT(CASE WHEN ca.created_at >= NOW() - INTERVAL '30 days' THEN 1 END) as activities_last_30_days,
+    MAX(ca.completed_at) as last_activity_date,
+    MIN(ca.completed_at) as first_activity_date
+FROM business_clients c
+LEFT JOIN client_activities ca ON c.id = ca.client_id
+GROUP BY c.id, c.business_name;
+
+-- Create view for recent activities across all clients
+CREATE OR REPLACE VIEW recent_client_activities AS
+SELECT 
+    ca.id,
+    ca.client_id,
+    ca.activity_type,
+    ca.subject,
+    ca.description,
+    ca.outcome,
+    ca.completed_at,
+    ca.created_at,
+    c.business_name,
+    e.full_name as employee_name,
+    e.role as employee_role,
+    CASE 
+        WHEN ca.completed_at >= NOW() - INTERVAL '1 day' THEN 'today'
+        WHEN ca.completed_at >= NOW() - INTERVAL '7 days' THEN 'this_week'
+        WHEN ca.completed_at >= NOW() - INTERVAL '30 days' THEN 'this_month'
+        ELSE 'older'
+    END as activity_age
+FROM client_activities ca
+JOIN business_clients c ON ca.client_id = c.id
+LEFT JOIN employees e ON ca.employee_id = e.id
+ORDER BY ca.completed_at DESC;
+
+-- Insert sample activity types into permissions if needed
+INSERT INTO permissions (name, description) VALUES
+    ('client_activity_view', 'View client activities and history'),
+    ('client_activity_create', 'Create new client activities'),
+    ('client_activity_edit', 'Edit existing client activities'),
+    ('client_activity_delete', 'Delete client activities'),
+    ('client_activity_export', 'Export client activity reports')
+ON CONFLICT (name) DO NOTHING;
+
+-- Grant default activity permissions to relevant departments
+WITH dept_perms AS (
+    SELECT 
+        d.id as dept_id,
+        p.id as perm_id
+    FROM departments d
+    CROSS JOIN permissions p
+    WHERE 
+        -- Sales Department gets full activity permissions
+        (d.name = 'Sales' AND p.name IN ('client_activity_view', 'client_activity_create', 'client_activity_edit', 'client_activity_export')) OR
+        
+        -- Customer Success gets view and create permissions
+        (d.name = 'Customer Success' AND p.name IN ('client_activity_view', 'client_activity_create', 'client_activity_export')) OR
+        
+        -- Operations gets full permissions
+        (d.name = 'Operations' AND p.name IN ('client_activity_view', 'client_activity_create', 'client_activity_edit', 'client_activity_delete', 'client_activity_export'))
+)
+INSERT INTO department_permissions (department_id, permission_id)
+SELECT dept_id, perm_id FROM dept_perms
+ON CONFLICT (department_id, permission_id) DO NOTHING;
+
+-- Show summary of what was created
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Client Activities Schema Created Successfully!';
+    RAISE NOTICE '📊 Tables: client_activities, client_activity_attachments';
+    RAISE NOTICE '🔐 Permissions: 5 activity-related permissions added';
+    RAISE NOTICE '⚙️ Functions: update_client_last_activity trigger function';
+    RAISE NOTICE '👁️ Views: client_activity_summary, recent_client_activities';
+    RAISE NOTICE '📈 Indexes: Performance indexes on all key fields';
+    RAISE NOTICE '🔄 Triggers: Auto-update client last activity timestamp';
+END $$;
