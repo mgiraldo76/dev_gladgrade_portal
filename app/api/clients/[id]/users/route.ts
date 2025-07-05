@@ -1,4 +1,4 @@
-// app/api/clients/[id]/users/route.ts - Client portal users management
+// app/api/clients/[id]/users/route.ts - Client portal users management - FIXED FIREBASE CLAIMS
 
 import { type NextRequest, NextResponse } from "next/server"
 import { query } from "@/lib/database"
@@ -27,7 +27,68 @@ function generateTemporaryPassword(): string {
   return password
 }
 
-// Helper function to get permissions for role
+// Helper function to check if email exists anywhere in the system
+async function checkEmailExists(email: string, excludeUserId?: string): Promise<{ exists: boolean; table: string; details?: string }> {
+  const lowerEmail = email.toLowerCase().trim()
+  
+  // Check employees table (GladGrade staff)
+  const employeeResult = await query(
+    "SELECT id, full_name, role FROM employees WHERE LOWER(email) = $1 AND status = 'active'",
+    [lowerEmail]
+  )
+  
+  if (employeeResult.rows.length > 0) {
+    const employee = employeeResult.rows[0]
+    return {
+      exists: true,
+      table: 'employees',
+      details: `GladGrade employee: ${employee.full_name} (${employee.role})`
+    }
+  }
+  
+  // Check client_portal_users table (all clients)
+  let clientUserQuery = "SELECT cpu.id, cpu.full_name, cpu.role, bc.business_name FROM client_portal_users cpu JOIN business_clients bc ON cpu.business_client_id = bc.id WHERE LOWER(cpu.email) = $1 AND cpu.status = 'active'"
+  let queryParams: any[] = [lowerEmail]
+  
+  // If editing, exclude the current user
+  if (excludeUserId) {
+    clientUserQuery += " AND cpu.id != $2"
+    queryParams.push(parseInt(excludeUserId))
+  }
+  
+  const clientUserResult = await query(clientUserQuery, queryParams)
+  
+  if (clientUserResult.rows.length > 0) {
+    const clientUser = clientUserResult.rows[0]
+    return {
+      exists: true,
+      table: 'client_portal_users',
+      details: `Client user: ${clientUser.full_name} (${clientUser.role}) at ${clientUser.business_name}`
+    }
+  }
+  
+  return { exists: false, table: '' }
+}
+
+// Helper function to get context-aware error message
+function getEmailExistsErrorMessage(userType: 'employee' | 'client', emailCheckResult: any): string {
+  const baseMessage = "Oh oh, the email for the user you are attempting to add already exists and cannot be reused. Please check and try again."
+  
+  let contactMessage = ""
+  if (userType === 'employee') {
+    contactMessage = "If you believe this is an error, contact the Portal administrator."
+  } else {
+    contactMessage = "If you believe this is an error, contact your GladGrade representative."
+  }
+  
+  let detailMessage = ""
+  if (emailCheckResult.details) {
+    detailMessage = ` (Found in system: ${emailCheckResult.details})`
+  }
+  
+  return `${baseMessage}${detailMessage} ${contactMessage}`
+}
+
 function getPermissionsForRole(role: string): string[] {
   const permissions = {
     client_admin: [
@@ -57,14 +118,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const clientId = Number.parseInt(params.id)
 
     // Get current user for access control
-    const userEmail = request.headers.get("x-user-email") || undefined
+    const requestUserEmail = request.headers.get("x-user-email") || undefined
     const firebaseUid = request.headers.get("x-firebase-uid") || undefined
 
     let currentUser = null
     if (firebaseUid) {
       currentUser = await getEmployeeByAuth(firebaseUid)
-    } else if (userEmail) {
-      currentUser = await getEmployeeByAuth(undefined, userEmail)
+    } else if (requestUserEmail) {
+      currentUser = await getEmployeeByAuth(undefined, requestUserEmail)
     }
 
     if (!currentUser) {
@@ -125,8 +186,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const userData = await request.json()
 
     // Get current user for access control and audit logging
-    const userEmail = request.headers.get("x-user-email") || undefined
-    const currentUser = await getEmployeeByAuth(undefined, userEmail)
+    const requestUserEmail = request.headers.get("x-user-email") || undefined
+    const currentUser = await getEmployeeByAuth(undefined, requestUserEmail)
 
     if (!currentUser) {
       return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
@@ -134,17 +195,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const {
       email,
+      user_email, // Alternative field name from frontend
       full_name,
+      user_name, // Alternative field name from frontend
       role = 'client_user',
       temporary_password,
       send_welcome_email = true,
       create_firebase_account = true,
     } = userData
 
+    // Handle both field naming conventions
+    const userEmailValue = email || user_email
+    const userFullNameValue = full_name || user_name
+
     console.log(`👤 Creating new portal user for client ${clientId}`)
+    console.log(`📧 Email: ${userEmailValue}`)
+    console.log(`👤 Name: ${userFullNameValue}`)
+    console.log(`🔒 Role: ${role}`)
 
     // Validation
-    if (!email || !full_name) {
+    if (!userEmailValue || !userFullNameValue) {
+      console.error("❌ Validation failed:", { userEmailValue, userFullNameValue })
       return NextResponse.json(
         { success: false, error: "Email and full name are required" }, 
         { status: 400 }
@@ -170,10 +241,33 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const client = clientResult.rows[0]
 
+    // Enhanced: Check if email exists anywhere in the system
+    const emailCheck = await checkEmailExists(userEmailValue)
+    
+    if (emailCheck.exists) {
+      console.error("❌ Email validation failed:", emailCheck)
+      
+      // Determine if current user is GladGrade employee or client user
+      // For now, assuming GladGrade employee since client users can't access this yet
+      const userType = 'employee' // TODO: Update when client portal is implemented
+      
+      const errorMessage = getEmailExistsErrorMessage(userType, emailCheck)
+      
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: errorMessage,
+          errorCode: 'EMAIL_EXISTS',
+          conflictDetails: emailCheck
+        }, 
+        { status: 409 }
+      )
+    }
+
     // Check if user already exists for this client
     const existingUserResult = await query(
       "SELECT id FROM client_portal_users WHERE business_client_id = $1 AND email = $2",
-      [clientId, email.toLowerCase()]
+      [clientId, userEmailValue.toLowerCase()]
     )
 
     if (existingUserResult.rows.length > 0) {
@@ -195,8 +289,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         console.log("🔥 Creating Firebase Authentication user for client portal...")
 
         const firebaseUser = await createFirebaseUser({
-          email: email.toLowerCase().trim(),
-          displayName: full_name.trim(),
+          email: userEmailValue.toLowerCase().trim(),
+          displayName: userFullNameValue.trim(),
           password: userPassword,
           emailVerified: false,
         })
@@ -205,19 +299,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         firebaseAccountCreated = true
         console.log(`✅ Firebase user created with UID: ${firebaseUid}`)
 
-        // Set custom claims for client portal access
+        // FIXED: Set custom claims for client portal access with correct structure
         if (setCustomClaims) {
           const permissions = getPermissionsForRole(role)
           
           await setCustomClaims(firebaseUid, {
-            userType: "client",
-            businessId: clientId,
-            businessName: client.business_name,
-            role: role,
-            permissions: permissions,
+            // ✅ FIXED: Set role as 'client' for providers.tsx compatibility
+            role: "client",                    // This matches UserRole in providers.tsx
+            userType: "client",               // Additional context
+            businessId: clientId,             // Client business ID
+            businessName: client.business_name, // Client business name
+            clientRole: role,                 // Specific client role (client_admin, client_user, etc.)
+            permissions: permissions,         // Role-based permissions
           })
 
-          console.log(`✅ Custom claims set for Firebase client user`)
+          console.log(`✅ Custom claims set for Firebase client user with role: 'client'`)
         }
       } catch (firebaseError: unknown) {
         const errorMessage = firebaseError instanceof Error ? firebaseError.message : "Unknown Firebase error"
@@ -244,8 +340,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       [
         clientId,
         firebaseUid,
-        email.toLowerCase(),
-        full_name,
+        userEmailValue.toLowerCase(),
+        userFullNameValue,
         role,
         'active',
         userPassword, // Store temporarily for sharing
@@ -266,7 +362,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         actionType: "CREATE",
         tableName: "client_portal_users",
         recordId: newUser.id,
-        actionDescription: `Created client portal user: ${full_name} (${email}) for ${client.business_name}`,
+        actionDescription: `Created client portal user: ${userFullNameValue} (${userEmailValue}) for ${client.business_name}`,
         newValues: { ...newUser, temporary_password: '[REDACTED]' },
         businessContext: "client_management",
         severityLevel: "info",

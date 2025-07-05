@@ -1,4 +1,4 @@
-// components/edit-client-modal.tsx - Enhanced with security_level and Google Places integration
+// components/edit-client-modal.tsx - Enhanced with security_level, Google Places integration, and USER EDIT/DELETE functionality
 
 "use client"
 
@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Phone, Mail, MapPin, Globe, User, Building, Users, Plus, Search, Star, Trash2, Edit } from "lucide-react"
+import { Calendar, Phone, Mail, MapPin, Globe, User, Building, Users, Plus, Search, Star, Trash2, Edit, Key } from "lucide-react"
 import { useAuth } from "@/app/providers"
 
 interface EditClientModalProps {
@@ -198,6 +198,13 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState<any>(null)
 
+  // NEW: Edit user state
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false)
+  const [selectedEditUser, setSelectedEditUser] = useState<any>(null)
+  
+  // NEW: User filter state
+  const [showInactiveUsers, setShowInactiveUsers] = useState(false)
+
   // Google Places integration for new locations
   const [locationSearchQuery, setLocationSearchQuery] = useState("")
   const [locationSearchResults, setLocationSearchResults] = useState<GooglePlace[]>([])
@@ -250,7 +257,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     temporary_password: "",
   })
 
-  // Edit user state
+  // NEW: Edit user state
   const [editUser, setEditUser] = useState({
     email: "",
     full_name: "",
@@ -597,6 +604,167 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     setShowLocationSearch(true)
   }
 
+  // NEW: User management functions
+  const handleUserEdit = (clientUser: any) => {
+    setSelectedEditUser(clientUser)
+    setEditUser({
+      email: clientUser.email || clientUser.user_email || "",
+      full_name: clientUser.full_name || clientUser.user_name || "",
+      role: clientUser.role || clientUser.user_role || "client_admin",
+      status: clientUser.status || "active",
+      reset_password: false,
+      new_password: "",
+    })
+    setIsEditUserModalOpen(true)
+  }
+
+  const handleSaveEditUser = async () => {
+    if (!editUser.email.trim() || !editUser.full_name.trim()) {
+      alert("Email and full name are required")
+      return
+    }
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      const updateData: any = {
+        email: editUser.email.trim(),
+        full_name: editUser.full_name.trim(),
+        role: editUser.role,
+        status: editUser.status,
+      }
+
+      if (editUser.reset_password) {
+        updateData.reset_password = true
+      }
+
+      if (editUser.new_password && editUser.new_password.trim()) {
+        updateData.new_password = editUser.new_password.trim()
+      }
+
+      console.log("🔍 Updating user with data:", {
+        ...updateData,
+        new_password: updateData.new_password ? '[REDACTED]' : undefined
+      })
+
+      const response = await fetch(`/api/clients/${client.id}/users/${selectedEditUser.id}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(updateData),
+      })
+
+      if (response.ok) {
+        const responseData = await response.json()
+        console.log("✅ User updated successfully:", responseData)
+        
+        loadClientUsers() // Reload users list
+        setIsEditUserModalOpen(false)
+        resetEditUserForm()
+        
+        alert("User updated successfully!")
+      } else {
+        const errorData = await response.json()
+        console.error("❌ Failed to update user:", errorData)
+        
+        // Show enhanced error message for email conflicts
+        if (errorData.errorCode === 'EMAIL_EXISTS') {
+          alert(errorData.error)
+        } else {
+          alert(`Failed to update user: ${errorData.error}`)
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error updating user:", error)
+      alert("Error updating user")
+    }
+  }
+
+  const handleDeleteUser = async (clientUser: any) => {
+    if (!confirm(`Are you sure you want to deactivate ${clientUser.full_name || clientUser.user_name}? This will disable their access to the client portal.`)) {
+      return
+    }
+
+    try {
+      const headers: Record<string, string> = {}
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      const response = await fetch(`/api/clients/${client.id}/users/${clientUser.id}`, {
+        method: "DELETE",
+        headers,
+      })
+
+      if (response.ok) {
+        loadClientUsers() // Reload users list
+        alert("User deactivated successfully!")
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to deactivate user: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error("Error deactivating user:", error)
+      alert("Error deactivating user")
+    }
+  }
+
+  // NEW: Reactivate user function
+  const handleReactivateUser = async (clientUser: any) => {
+    if (!confirm(`Are you sure you want to reactivate ${clientUser.full_name || clientUser.user_name}? This will restore their access to the client portal.`)) {
+      return
+    }
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      const response = await fetch(`/api/clients/${client.id}/users/${clientUser.id}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          email: clientUser.email,
+          full_name: clientUser.full_name,
+          role: clientUser.role,
+          status: "active",
+        }),
+      })
+
+      if (response.ok) {
+        loadClientUsers() // Reload users list
+        alert("User reactivated successfully!")
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to reactivate user: ${errorData.error}`)
+      }
+    } catch (error) {
+      console.error("Error reactivating user:", error)
+      alert("Error reactivating user")
+    }
+  }
+
+  const resetEditUserForm = () => {
+    setSelectedEditUser(null)
+    setEditUser({
+      email: "",
+      full_name: "",
+      role: "client_admin",
+      status: "active",
+      reset_password: false,
+      new_password: "",
+    })
+  }
+
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
@@ -712,7 +880,13 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         alert(`User created successfully! Temporary password: ${responseData.data.temporary_password}`)
       } else {
         console.error("❌ API Error:", responseData)
-        alert(`Failed to create user: ${responseData.error || 'Unknown error'}`)
+        
+        // Show enhanced error message for email conflicts
+        if (responseData.errorCode === 'EMAIL_EXISTS') {
+          alert(responseData.error)
+        } else {
+          alert(`Failed to create user: ${responseData.error || 'Unknown error'}`)
+        }
       }
     } catch (error) {
       console.error("❌ Network Error:", error)
@@ -1205,10 +1379,25 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
           <TabsContent value="users" className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium">Client Users</h3>
-              <Button size="sm" onClick={() => setIsUserModalOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add User
-              </Button>
+              <div className="flex items-center gap-3">
+                {/* NEW: Filter toggle for inactive users */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="show_inactive"
+                    checked={showInactiveUsers}
+                    onChange={(e) => setShowInactiveUsers(e.target.checked)}
+                    className="rounded"
+                  />
+                  <Label htmlFor="show_inactive" className="text-sm text-gray-600">
+                    Show inactive users
+                  </Label>
+                </div>
+                <Button size="sm" onClick={() => setIsUserModalOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add User
+                </Button>
+              </div>
             </div>
 
             {loadingUsers ? (
@@ -1217,21 +1406,46 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
               <div className="space-y-2">
                 {/* Debug info */}
                 <div className="text-xs text-gray-500 mb-2">
-                  Found {clientUsers.length} user(s)
+                  Found {clientUsers.length} total user(s)
+                  {!showInactiveUsers && clientUsers.filter((u: any) => u.status === 'inactive').length > 0 && (
+                    <span className="ml-2 text-blue-600">
+                      ({clientUsers.filter((u: any) => u.status === 'inactive').length} inactive hidden)
+                    </span>
+                  )}
+                  {showInactiveUsers && (
+                    <span className="ml-2 text-green-600">
+                      (showing all users including inactive)
+                    </span>
+                  )}
                 </div>
                 
-                {clientUsers.length === 0 ? (
+                {clientUsers.filter((clientUser: any) => showInactiveUsers || clientUser.status !== 'inactive').length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <User className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
-                    <p className="text-gray-600 mb-4">Add your first client user to get started.</p>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      {clientUsers.length === 0 ? "No users found" : "No active users found"}
+                    </h3>
+                    <p className="text-gray-600 mb-4">
+                      {clientUsers.length === 0 
+                        ? "Add your first client user to get started."
+                        : "All users are inactive. Toggle 'Show inactive users' to see them."
+                      }
+                    </p>
                     <Button onClick={() => setIsUserModalOpen(true)}>
                       <Plus className="h-4 w-4 mr-2" />
                       Add First User
                     </Button>
                   </div>
                 ) : (
-                  clientUsers.map((clientUser: any) => (
+                  clientUsers
+                    .filter((clientUser: any) => {
+                      // Show active users always, show inactive only if toggle is on
+                      if (clientUser.status === 'inactive') {
+                        return showInactiveUsers
+                      }
+                      return true
+                    })
+                    .map((clientUser: any) => (
                     <Card key={clientUser.id || clientUser.firebase_uid}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
@@ -1249,10 +1463,44 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <Badge variant="outline">{clientUser.role || clientUser.user_role}</Badge>
-                            <Badge variant={clientUser.status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                              {clientUser.status || 'active'}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">{clientUser.role || clientUser.user_role}</Badge>
+                              <Badge variant={clientUser.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                                {clientUser.status || 'active'}
+                              </Badge>
+                            </div>
+                            {/* NEW: Edit and Delete buttons */}
+                            <div className="flex gap-1 mt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleUserEdit(clientUser)}
+                                className="h-8 px-2"
+                                disabled={clientUser.status === 'inactive'}
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              {clientUser.status === 'active' ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleDeleteUser(clientUser)}
+                                  className="h-8 px-2 text-red-600 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleReactivateUser(clientUser)}
+                                  className="h-8 px-2 text-green-600 hover:text-green-700"
+                                  title="Reactivate user"
+                                >
+                                  <User className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -1322,6 +1570,106 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                     Cancel
                   </Button>
                   <Button onClick={handleCreateUser}>Create User</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* NEW: Edit User Modal */}
+            <Dialog open={isEditUserModalOpen} onOpenChange={setIsEditUserModalOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit User</DialogTitle>
+                  <DialogDescription>
+                    Update user information and permissions
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_full_name">Full Name</Label>
+                    <Input
+                      id="edit_full_name"
+                      value={editUser.full_name}
+                      onChange={(e) => setEditUser({ ...editUser, full_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_email">Email</Label>
+                    <Input
+                      id="edit_email"
+                      type="email"
+                      value={editUser.email}
+                      onChange={(e) => setEditUser({ ...editUser, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_role">Role</Label>
+                      <Select
+                        value={editUser.role}
+                        onValueChange={(value) => setEditUser({ ...editUser, role: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="client_admin">Admin</SelectItem>
+                          <SelectItem value="client_moderator">Moderator</SelectItem>
+                          <SelectItem value="client_user">User</SelectItem>
+                          <SelectItem value="client_viewer">Viewer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_status">Status</Label>
+                      <Select
+                        value={editUser.status}
+                        onValueChange={(value) => setEditUser({ ...editUser, status: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="suspended">Suspended</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="reset_password"
+                        checked={editUser.reset_password}
+                        onChange={(e) => setEditUser({ ...editUser, reset_password: e.target.checked })}
+                        className="rounded"
+                      />
+                      <Label htmlFor="reset_password" className="flex items-center gap-1">
+                        <Key className="h-3 w-3" />
+                        Force password reset on next login
+                      </Label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new_password">Set New Password (Optional)</Label>
+                      <Input
+                        id="new_password"
+                        type="password"
+                        value={editUser.new_password}
+                        onChange={(e) => setEditUser({ ...editUser, new_password: e.target.value })}
+                        placeholder="Leave empty to keep current password"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => {
+                    setIsEditUserModalOpen(false)
+                    resetEditUserForm()
+                  }}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveEditUser}>Save Changes</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
