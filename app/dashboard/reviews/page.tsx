@@ -1,5 +1,6 @@
 // File: app/dashboard/reviews/page.tsx
 // Enhanced Reviews Dashboard with filtering, pagination, and role-based access
+// FIXED: Added client user filtering by businessId
 
 "use client"
 
@@ -49,8 +50,16 @@ interface Client {
   place_id: string
 }
 
+// NEW: Interface for business locations
+interface BusinessLocation {
+  id: number
+  place_id: string
+  location_name: string
+  is_primary: boolean
+}
+
 export default function ReviewsPage() {
-  const { user, role } = useAuth()
+  const { user, role, businessId } = useAuth() // NEW: Get businessId from context
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -60,6 +69,10 @@ export default function ReviewsPage() {
   const [stats, setStats] = useState<ReviewStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingStats, setLoadingStats] = useState(false)
+  
+  // NEW: State for client's business locations and place IDs
+  const [clientBusinessLocations, setClientBusinessLocations] = useState<BusinessLocation[]>([])
+  const [clientPlaceIds, setClientPlaceIds] = useState<string[]>([])
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -82,6 +95,13 @@ export default function ReviewsPage() {
   const isClientUser = role === 'client'
   const canViewAllReviews = ['super_admin', 'admin', 'employee', 'moderator'].includes(role || '')
 
+  // NEW: Load client's business locations if they're a client user
+  useEffect(() => {
+    if (isClientUser && businessId) {
+      loadClientBusinessLocations()
+    }
+  }, [isClientUser, businessId])
+
   // Load clients for filter dropdown (admin users only)
   useEffect(() => {
     if (canViewAllReviews) {
@@ -92,14 +112,65 @@ export default function ReviewsPage() {
   // Load reviews when filters change
   useEffect(() => {
     loadReviews()
-  }, [currentPage, filters])
+  }, [currentPage, filters, clientPlaceIds]) // NEW: Add clientPlaceIds dependency
 
   // Load stats when client/place changes
   useEffect(() => {
     if (filters.placeId) {
       loadReviewStats()
+    } else if (isClientUser && clientPlaceIds.length > 0) {
+      // NEW: Load stats for client's primary location if no specific place selected
+      const primaryLocation = clientBusinessLocations.find(loc => loc.is_primary)
+      const defaultPlaceId = primaryLocation?.place_id || clientPlaceIds[0]
+      if (defaultPlaceId) {
+        loadReviewStatsForPlace(defaultPlaceId)
+      }
     }
-  }, [filters.placeId])
+  }, [filters.placeId, isClientUser, clientPlaceIds, clientBusinessLocations])
+
+  // NEW: Load client's business locations using client-accessible endpoint
+  const loadClientBusinessLocations = async () => {
+    if (!businessId) return
+    
+    try {
+      console.log('🏢 Loading business locations for client:', businessId)
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+      
+      // Add Firebase auth token for client authentication
+      const auth = getAuth()
+      const currentUser = auth.currentUser
+      if (currentUser) {
+        const token = await currentUser.getIdToken()
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      // Use the corrected client-accessible endpoint  
+      const response = await fetch(`/api/clients/${businessId}/locations`, { headers })
+      if (response.ok) {
+        const data = await response.json()
+        const locations = data.data || []
+        
+        setClientBusinessLocations(locations)
+        
+        // Extract place IDs for filtering
+        const placeIds = locations
+          .filter((loc: BusinessLocation) => loc.place_id)
+          .map((loc: BusinessLocation) => loc.place_id)
+        
+        setClientPlaceIds(placeIds)
+        
+        console.log('✅ Client business locations loaded:', locations)
+        console.log('✅ Client place IDs:', placeIds)
+      } else {
+        console.error('❌ Failed to load client business locations:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('❌ Error loading client business locations:', error)
+    }
+  }
 
   const loadClients = async () => {
     try {
@@ -120,20 +191,24 @@ export default function ReviewsPage() {
 
   const loadReviewStats = async () => {
     if (!filters.placeId) return
-    
+    loadReviewStatsForPlace(filters.placeId)
+  }
+
+  // NEW: Load stats for a specific place ID
+  const loadReviewStatsForPlace = async (placeId: string) => {
     setLoadingStats(true)
     try {
       const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
-        }
+        'Content-Type': 'application/json'
+      }
       const auth = getAuth()
-        const currentUser = auth.currentUser
-        if (currentUser) {
-          const token = await currentUser.getIdToken()
-          headers['Authorization'] = `Bearer ${token}`
-        }
+      const currentUser = auth.currentUser
+      if (currentUser) {
+        const token = await currentUser.getIdToken()
+        headers['Authorization'] = `Bearer ${token}`
+      }
 
-      const response = await fetch(`/api/gcloud-proxy/review-count?placeId=${filters.placeId}`, { headers })
+      const response = await fetch(`/api/gcloud-proxy/review-count?placeId=${placeId}`, { headers })
       if (response.ok) {
         const data = await response.json()
         setStats(data.data)
@@ -151,27 +226,57 @@ export default function ReviewsPage() {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       }
-    const auth = getAuth()
+      const auth = getAuth()
       const currentUser = auth.currentUser
       if (currentUser) {
         const token = await currentUser.getIdToken()
         headers['Authorization'] = `Bearer ${token}`
       }
 
+      // NEW: Build request body with client filtering
+      const requestBody: any = {
+        page: currentPage,
+        limit: reviewsPerPage,
+        placeId: filters.placeId,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        hasImages: filters.hasImages,
+        ratingRange: filters.ratingRange,
+        search: filters.searchText,
+        clientId: filters.clientId
+      }
+
+      // NEW: Client user filtering - restrict to their place IDs only
+      if (isClientUser && clientPlaceIds.length > 0) {
+        console.log('🔒 Applying client filtering for place IDs:', clientPlaceIds)
+        
+        // If no specific place filter is set, use the client's place ID
+        if (!filters.placeId) {
+          // For client users, default to their primary location's place ID
+          const primaryLocation = clientBusinessLocations.find(loc => loc.is_primary)
+          const defaultPlaceId = primaryLocation?.place_id || clientPlaceIds[0]
+          requestBody.placeId = defaultPlaceId
+          console.log('🎯 Setting client place ID filter:', defaultPlaceId)
+        } else {
+          // Verify the selected place belongs to the client
+          if (!clientPlaceIds.includes(filters.placeId)) {
+            console.warn('⚠️ Client trying to access place they don\'t own:', filters.placeId)
+            setReviews([])
+            setLoading(false)
+            return
+          }
+          console.log('🎯 Using client-selected place ID filter:', filters.placeId)
+        }
+        // Remove clientId filter for client users (they can only see their own)
+        delete requestBody.clientId
+      }
+
+      console.log('📤 Review request body:', requestBody)
+
       const response = await fetch(`/api/gcloud-proxy/reviews/query`, { 
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          page: currentPage,
-          limit: reviewsPerPage,
-          placeId: filters.placeId,
-          dateFrom: filters.dateFrom,
-          dateTo: filters.dateTo,
-          hasImages: filters.hasImages,
-          ratingRange: filters.ratingRange,
-          search: filters.searchText,
-          clientId: filters.clientId
-        })
+        body: JSON.stringify(requestBody)
       })
       
       if (response.ok) {
@@ -179,11 +284,11 @@ export default function ReviewsPage() {
 
         console.log('✅ Reviews API Response:', data)
         console.log('✅ Setting reviews:', data.data?.reviews)
-        console.log('✅ Setting totalCount:', data.data?.totalCount)
+        console.log('✅ Setting totalCount:', data.data?.pagination?.totalCount)
         
         setReviews(data.data?.reviews || [])
-        setTotalCount(data.data?.totalCount || 0)
-        setTotalPages(Math.ceil((data.data?.totalCount || 0) / reviewsPerPage))
+        setTotalCount(data.data?.pagination?.totalCount || 0)
+        setTotalPages(Math.ceil((data.data?.pagination?.totalCount || 0) / reviewsPerPage))
       } else {
         console.error('Failed to load reviews:', response.status)
         setReviews([])
@@ -248,6 +353,18 @@ export default function ReviewsPage() {
     })
   }
 
+  // NEW: Show loading state if client user and locations not loaded yet
+  if (isClientUser && businessId && clientPlaceIds.length === 0 && !loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your business locations...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (loading && reviews.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -270,6 +387,12 @@ export default function ReviewsPage() {
             <span className="text-sm text-blue-600">
               {isClientUser ? 'Your Business Reviews' : 'Platform Review Management'}
             </span>
+            {/* NEW: Show client business info */}
+            {isClientUser && clientBusinessLocations.length > 0 && (
+              <span className="text-xs text-gray-500">
+                • {clientBusinessLocations.length} location{clientBusinessLocations.length > 1 ? 's' : ''}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
@@ -346,7 +469,7 @@ export default function ReviewsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-            {/* Client Filter - Only for admin users */}
+            {/* Client Filter - Only for admin users, HIDDEN for client users */}
             {canViewAllReviews && (
               <div>
                 <label className="text-sm font-medium">Client</label>
@@ -359,6 +482,27 @@ export default function ReviewsPage() {
                     {clients.map(client => (
                       <SelectItem key={client.id} value={client.id.toString()}>
                         {client.business_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* NEW: Location Filter - Only for client users with multiple locations */}
+            {isClientUser && clientBusinessLocations.length > 1 && (
+              <div>
+                <label className="text-sm font-medium">Location</label>
+                <Select value={filters.placeId || "all"} onValueChange={(value) => handleFilterChange('placeId', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Locations</SelectItem>
+                    {clientBusinessLocations.map(location => (
+                      <SelectItem key={location.id} value={location.place_id}>
+                        {location.location_name}
+                        {location.is_primary && " (Primary)"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -430,6 +574,12 @@ export default function ReviewsPage() {
           <div className="flex justify-between items-center">
             <div className="text-sm text-gray-600">
               Showing {reviews.length} of {totalCount} reviews
+              {/* NEW: Show filtering info for client users */}
+              {isClientUser && (
+                <span className="text-blue-600">
+                  {" "}• Filtered for your business
+                </span>
+              )}
             </div>
             <Button variant="outline" size="sm" onClick={clearFilters}>
               Clear Filters
@@ -453,7 +603,12 @@ export default function ReviewsPage() {
             <div className="text-center py-8 text-gray-500">
               <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
               <p className="font-medium">No reviews found</p>
-              <p className="text-sm">Try adjusting your filters or check back later</p>
+              <p className="text-sm">
+                {isClientUser 
+                  ? "No reviews found for your business locations" 
+                  : "Try adjusting your filters or check back later"
+                }
+              </p>
             </div>
           ) : (
             <div className="space-y-4">

@@ -1,3 +1,5 @@
+// app/providers.tsx
+
 "use client"
 
 import type React from "react"
@@ -10,6 +12,7 @@ type UserRole = "super_admin" | "admin" | "moderator" | "employee" | "client" | 
 interface AuthContextType {
   user: User | null
   role: UserRole
+  businessId: number | null // NEW: Add businessId for client users
   loading: boolean
   isFirebaseConfigured: boolean
 }
@@ -17,6 +20,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   role: null,
+  businessId: null, // NEW: Add to default context
   loading: true,
   isFirebaseConfigured: false,
 })
@@ -70,6 +74,7 @@ function getUserRoleFromEmail(email: string): UserRole {
 export function Providers({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [role, setRole] = useState<UserRole>(null)
+  const [businessId, setBusinessId] = useState<number | null>(null) // NEW: Add businessId state
   const [loading, setLoading] = useState(true)
   const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(false)
 
@@ -108,8 +113,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
             // First try to get role from Firebase custom claims
             const token = await user.getIdTokenResult()
             let userRole = token.claims.role as UserRole
+            let userBusinessId: number | null = null
 
             console.log("🏷️ Custom claim role:", userRole)
+            console.log("🏷️ All custom claims:", token.claims)
+
+            // NEW: Extract businessId for client users
+            if (userRole === "client" && token.claims.businessId) {
+              userBusinessId = parseInt(token.claims.businessId as string)
+              console.log("🏢 Client businessId extracted:", userBusinessId)
+            }
 
             // If no custom claim exists, determine role from email domain
             if (!userRole) {
@@ -118,17 +131,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
             }
 
             setRole(userRole)
+            setBusinessId(userBusinessId) // NEW: Set businessId
             console.log("✅ Final role set:", userRole)
+            console.log("✅ Final businessId set:", userBusinessId)
           } catch (error) {
             console.error("❌ Error getting user role:", error)
             // Fallback to email-based role assignment
             const fallbackRole = getUserRoleFromEmail(user.email)
             setRole(fallbackRole)
+            setBusinessId(null) // Reset businessId on error
             console.log(`🔄 Fallback role assigned: ${user.email} → ${fallbackRole}`)
           }
         } else {
-          console.log("👤 No user, setting role to null")
+          console.log("👤 No user, setting role and businessId to null")
           setRole(null)
+          setBusinessId(null) // NEW: Reset businessId
         }
 
         console.log("⏰ Setting loading to false")
@@ -146,7 +163,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  console.log("🎨 Rendering Providers with:", { user: user?.email, role, loading, isFirebaseConfigured })
+  console.log("🎨 Rendering Providers with:", { 
+    user: user?.email, 
+    role, 
+    businessId, // NEW: Log businessId
+    loading, 
+    isFirebaseConfigured 
+  })
 
-  return <AuthContext.Provider value={{ user, role, loading, isFirebaseConfigured }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ user, role, businessId, loading, isFirebaseConfigured }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
