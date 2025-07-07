@@ -2519,3 +2519,13 @@ BEGIN
     RAISE NOTICE '📈 Indexes: Performance indexes on all key fields';
     RAISE NOTICE '🔄 Triggers: Auto-update client last activity timestamp';
 END $$;
+
+
+
+
+ALTER TABLE client_qr_codes 
+ADD CONSTRAINT unique_client_qr_type 
+UNIQUE (client_id, qr_type);
+
+ALTER TABLE client_qr_codes 
+ALTER COLUMN qr_image_path TYPE TEXT;

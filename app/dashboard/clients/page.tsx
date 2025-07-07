@@ -1,3 +1,4 @@
+// File: app/dashboard/clients/page.tsx
 // Update the existing clients page to include real review counts
 // Add these imports and modify the existing page.tsx
 
@@ -8,9 +9,10 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search, Building, MapPin, Star, Calendar, User, Phone, Globe, Shield, TrendingUp, MessageSquare, ExternalLink, BadgeCheck, CheckCircle, XCircle, Users } from 'lucide-react'
+import { Plus, Search, Building, MapPin, Star, Calendar, User, Phone, Globe, Shield, TrendingUp, MessageSquare, ExternalLink, BadgeCheck, CheckCircle, XCircle, Users, QrCode } from 'lucide-react'
 import { apiClient } from "@/lib/api-client"
 import { EditClientModal } from "@/components/edit-client-modal"
+import { QRCodeModal } from "@/components/qr-code-modal"
 import { useAuth } from "@/app/providers"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getMultipleGCSGScores, cleanupGCSGCache } from "@/lib/gcsg-utils"
@@ -46,6 +48,10 @@ export default function ClientsPage() {
   // NEW: Review counts state
   const [reviewCounts, setReviewCounts] = useState<ReviewCounts>({})
   const [loadingReviews, setLoadingReviews] = useState(false)
+
+  // QR Code Modal state
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [selectedQrClient, setSelectedQrClient] = useState<any>(null)
 
   type SortField = "business_name" | "industry_category_name" | "datecreated"
 
@@ -222,6 +228,11 @@ export default function ClientsPage() {
   const handleManageClient = (client: any) => {
     setSelectedClient(client)
     setIsClientModalOpen(true)
+  }
+
+  const handleShowQRCode = (client: any) => {
+    setSelectedQrClient(client)
+    setQrModalOpen(true)
   }
 
   const handleClientUpdated = () => {
@@ -467,20 +478,7 @@ export default function ClientsPage() {
                         )}
                       </div>
                     </div>
-                    {/*
-                    * Star Rating *
-                    <div className="text-center">
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 text-yellow-500" />
-                        <span className="font-semibold">
-                          {client.place_id && reviewCounts[client.place_id]?.average_rating || "N/A"}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">Avg Rating</div>
-                    </div>
-                    */}
 
-                   
 {/* Status Icons - Professional & Clear */}
 <div className="flex flex-col gap-3 items-center">
   {/* Verification Status */}
@@ -520,7 +518,6 @@ export default function ClientsPage() {
   </div>
 </div>
 
-
                     {/* Sales Rep */}
                     <div className="text-right">
                       <div className="text-sm font-medium">{client.sales_rep_name || "Unassigned"}</div>
@@ -532,6 +529,18 @@ export default function ClientsPage() {
                       <Button variant="outline" size="sm" onClick={() => handleManageClient(client)}>
                         Manage
                       </Button>
+                      
+                      {/* QR Code Button */}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleShowQRCode(client)}
+                        className="flex items-center gap-1"
+                      >
+                        <QrCode className="h-3 w-3" />
+                        QR Code
+                      </Button>
+                      
                       {client.website && (
                         <Button variant="ghost" size="sm" asChild>
                           <a href={client.website} target="_blank" rel="noopener noreferrer">
@@ -567,6 +576,21 @@ export default function ClientsPage() {
         onSuccess={handleClientUpdated}
         userRole={role || ""}
       />
+
+      {/* QR Code Modal */}
+      {selectedQrClient && (
+        <QRCodeModal
+          isOpen={qrModalOpen}
+          onClose={() => {
+            setQrModalOpen(false)
+            setSelectedQrClient(null)
+          }}
+          businessId={selectedQrClient.id}
+          businessName={selectedQrClient.business_name}
+          placeId={selectedQrClient.place_id}
+          businessAddress={selectedQrClient.business_address}
+        />
+      )}
 
       {/* Quick Stats */}
       <div className="grid gap-6 md:grid-cols-4">
