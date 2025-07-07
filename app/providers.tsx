@@ -1,18 +1,18 @@
-// app/providers.tsx
-
+// File: app/providers.tsx
 "use client"
 
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import { onAuthStateChanged, type User } from "firebase/auth"
 import { auth } from "@/services/firebase"
+import { ThemeProvider } from "@/components/theme-provider"
 
 type UserRole = "super_admin" | "admin" | "moderator" | "employee" | "client" | null
 
 interface AuthContextType {
   user: User | null
   role: UserRole
-  businessId: number | null // NEW: Add businessId for client users
+  businessId: number | null
   loading: boolean
   isFirebaseConfigured: boolean
 }
@@ -20,7 +20,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   role: null,
-  businessId: null, // NEW: Add to default context
+  businessId: null,
   loading: true,
   isFirebaseConfigured: false,
 })
@@ -71,17 +71,17 @@ function getUserRoleFromEmail(email: string): UserRole {
   return "client"
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [role, setRole] = useState<UserRole>(null)
-  const [businessId, setBusinessId] = useState<number | null>(null) // NEW: Add businessId state
+  const [businessId, setBusinessId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(false)
 
   useEffect(() => {
-    console.log("🚀 Providers useEffect running...")
+    console.log("🚀 AuthProvider useEffect running...")
 
-    // Check if Firebase is properly configured - simplified check
+    // Check if Firebase is properly configured
     const hasValidConfig = !!(
       process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
       process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
@@ -90,13 +90,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     )
 
     console.log("🔧 Firebase configured:", hasValidConfig)
-    console.log("🔧 Environment check:", {
-      apiKey: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-      projectId: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      authDomain: !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-      appId: !!process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    })
-
     setIsFirebaseConfigured(hasValidConfig)
 
     if (auth && hasValidConfig) {
@@ -116,9 +109,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
             let userBusinessId: number | null = null
 
             console.log("🏷️ Custom claim role:", userRole)
-            console.log("🏷️ All custom claims:", token.claims)
 
-            // NEW: Extract businessId for client users
+            // Extract businessId for client users
             if (userRole === "client" && token.claims.businessId) {
               userBusinessId = parseInt(token.claims.businessId as string)
               console.log("🏢 Client businessId extracted:", userBusinessId)
@@ -131,7 +123,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             }
 
             setRole(userRole)
-            setBusinessId(userBusinessId) // NEW: Set businessId
+            setBusinessId(userBusinessId)
             console.log("✅ Final role set:", userRole)
             console.log("✅ Final businessId set:", userBusinessId)
           } catch (error) {
@@ -139,13 +131,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
             // Fallback to email-based role assignment
             const fallbackRole = getUserRoleFromEmail(user.email)
             setRole(fallbackRole)
-            setBusinessId(null) // Reset businessId on error
+            setBusinessId(null)
             console.log(`🔄 Fallback role assigned: ${user.email} → ${fallbackRole}`)
           }
         } else {
           console.log("👤 No user, setting role and businessId to null")
           setRole(null)
-          setBusinessId(null) // NEW: Reset businessId
+          setBusinessId(null)
         }
 
         console.log("⏰ Setting loading to false")
@@ -163,17 +155,25 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  console.log("🎨 Rendering Providers with:", { 
-    user: user?.email, 
-    role, 
-    businessId, // NEW: Log businessId
-    loading, 
-    isFirebaseConfigured 
-  })
-
   return (
     <AuthContext.Provider value={{ user, role, businessId, loading, isFirebaseConfigured }}>
       {children}
     </AuthContext.Provider>
+  )
+}
+
+// Main Providers component
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="light"
+      enableSystem={true}
+      disableTransitionOnChange={false}
+    >
+      <AuthProvider>
+        {children}
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

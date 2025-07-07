@@ -294,7 +294,7 @@ export default function ClientsPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading business clients...</p>
+          <p className="text-muted-foreground">Loading business clients...</p>
         </div>
       </div>
     )
@@ -304,10 +304,10 @@ export default function ClientsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-dark">Business Clients</h1>
+          <h1 className="text-3xl font-bold">Business Clients</h1>
           <div className="flex items-center gap-2 mt-1">
-            <Building className="h-4 w-4 text-blue-600" />
-            <span className="text-sm text-blue-600">GladGrade Portal Management</span>
+            <Building className="h-4 w-4 text-primary" />
+            <span className="text-sm text-primary">GladGrade Portal Management</span>
           </div>
         </div>
         <div className="flex gap-2">
@@ -366,7 +366,7 @@ export default function ClientsPage() {
                 onChange={(e) => setShowInactive(e.target.checked)}
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <label htmlFor="showInactive" className="text-sm text-gray-700">
+              <label htmlFor="showInactive" className="text-sm text-foreground">
                 Show Inactive
               </label>
             </div>
@@ -390,7 +390,7 @@ export default function ClientsPage() {
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold">{client.business_name || "Unnamed Business"}</h3>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         {client.contact_name && (
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3" />
@@ -410,7 +410,7 @@ export default function ClientsPage() {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         {client.business_address && (
                           <div className="flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
@@ -438,7 +438,7 @@ export default function ClientsPage() {
                       >
                         {gcsgDisplay.score}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         GCSG Score
                         {client.place_id && gcsgScores.get(client.place_id)?.cached && (
                           <span className="text-blue-500 ml-1" title="Cached result">📋</span>
@@ -471,7 +471,7 @@ export default function ClientsPage() {
                           </div>
                         </div>
                       )}
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         Reviews
                         {loadingReviews && (
                           <span className="text-blue-500 ml-1" title="Loading...">⏳</span>
@@ -521,7 +521,7 @@ export default function ClientsPage() {
                     {/* Sales Rep */}
                     <div className="text-right">
                       <div className="text-sm font-medium">{client.sales_rep_name || "Unassigned"}</div>
-                      <div className="text-xs text-gray-500">Sales Representative</div>
+                      <div className="text-xs text-muted-foreground">Sales Representative</div>
                     </div>
 
                     {/* Actions */}
@@ -554,7 +554,7 @@ export default function ClientsPage() {
                 </div>
 
                 {/* Business Type and Additional Info */}
-                <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+                <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
                   <span>Industry: {client.industry_category_name || "Not specified"}</span>
                   {client.business_description && <span>• {client.business_description.substring(0, 100)}...</span>}
                   {!client.isactive && <span className="text-red-600">• INACTIVE</span>}
@@ -600,7 +600,7 @@ export default function ClientsPage() {
               <Users className="h-5 w-5 text-blue-600" />
               <div>
                 <div className="text-2xl font-bold">{filteredClients.length}</div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-muted-foreground">
                   {showInactive ? "Total Clients" : "Active Clients"}
                 </div>
               </div>
@@ -616,7 +616,7 @@ export default function ClientsPage() {
                 <div className="text-2xl font-bold">
                   {filteredClients.filter((c) => c.claim_status === "verified").length}
                 </div>
-                <div className="text-sm text-gray-600">Verified</div>
+                <div className="text-sm text-muted-foreground">Verified</div>
               </div>
             </div>
           </CardContent>
@@ -630,7 +630,7 @@ export default function ClientsPage() {
                 <div className="text-2xl font-bold">
                   {Object.values(reviewCounts).reduce((sum, counts) => sum + counts.total_reviews, 0)}
                 </div>
-                <div className="text-sm text-gray-600">Total Reviews</div>
+                <div className="text-sm text-muted-foreground">Total Reviews</div>
               </div>
             </div>
           </CardContent>
@@ -649,7 +649,7 @@ export default function ClientsPage() {
                       }, 0) / clients.filter(c => gcsgScores.get(c.place_id)?.score).length) || 0
                     : 0}
                 </div>
-                <div className="text-sm text-gray-600">Avg GCSG</div>
+                <div className="text-sm text-muted-foreground">Avg GCSG</div>
               </div>
             </div>
           </CardContent>

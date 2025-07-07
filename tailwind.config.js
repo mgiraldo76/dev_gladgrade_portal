@@ -1,3 +1,4 @@
+// File: tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ["class"],
@@ -18,18 +19,22 @@ module.exports = {
     },
     extend: {
       colors: {
-        primary: "#FFD700", // Golden color for GladGrade branding
-        "primary-dark": "#D4AF37", // Darker gold for hover states
-        "primary-light": "#FFDF4F", // Lighter gold for backgrounds
-        dark: "#222222", // Dark color for text
+        // Primary golden colors using CSS variables
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+          dark: "hsl(var(--primary-dark))",
+          light: "hsl(var(--primary-light))",
+        },
+        // All other colors using CSS variables for proper theme switching
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        sidebar: {
-          DEFAULT: "hsl(var(--sidebar-background))",
-          foreground: "hsl(var(--sidebar-foreground))",
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
@@ -51,6 +56,29 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar-background))",
+          foreground: "hsl(var(--sidebar-foreground))",
+          primary: "hsl(var(--sidebar-primary))",
+          "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
+          accent: "hsl(var(--sidebar-accent))",
+          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
+          border: "hsl(var(--sidebar-border))",
+          ring: "hsl(var(--sidebar-ring))",
+        },
+        chart: {
+          "1": "hsl(var(--chart-1))",
+          "2": "hsl(var(--chart-2))",
+          "3": "hsl(var(--chart-3))",
+          "4": "hsl(var(--chart-4))",
+          "5": "hsl(var(--chart-5))",
+        },
+        // Keep some hardcoded colors for backwards compatibility
+        // These will gradually be replaced with CSS variables
+        "primary-legacy": "#FFD700", // Golden color for GladGrade branding
+        "primary-dark-legacy": "#D4AF37", // Darker gold for hover states
+        "primary-light-legacy": "#FFDF4F", // Lighter gold for backgrounds
+        dark: "#222222", // Dark color for text
       },
       borderRadius: {
         lg: "var(--radius)",
