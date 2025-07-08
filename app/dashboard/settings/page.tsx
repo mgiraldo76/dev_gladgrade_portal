@@ -1,3 +1,4 @@
+// File: app/dashboard/settings/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -290,7 +291,7 @@ export default function SettingsPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading settings from database...</p>
+          <p className="text-muted-foreground">Loading settings from database...</p>
         </div>
       </div>
     )
@@ -300,20 +301,20 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-dark">Settings</h1>
+          <h1 className="text-3xl font-bold text-foreground">Settings</h1>
           <div className="flex items-center gap-2 mt-1">
-            <Database className="h-4 w-4 text-blue-600" />
-            <span className="text-sm text-blue-600">Connected to PostgreSQL Database</span>
-            {hasUnsavedChanges && <span className="text-sm text-orange-600">• Unsaved changes</span>}
+            <Database className="h-4 w-4 text-primary" />
+            <span className="text-sm text-primary">Connected to PostgreSQL Database</span>
+            {hasUnsavedChanges && <span className="text-sm text-orange-600 dark:text-orange-400">• Unsaved changes</span>}
           </div>
         </div>
         <Button
           onClick={handleSaveAllChanges}
           disabled={saveStatus === "saving"}
-          className="bg-primary hover:bg-primary-dark text-dark"
+          className="bg-primary hover:bg-primary-dark text-primary-foreground"
         >
           {saveStatus === "saving" && (
-            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-dark mr-2"></div>
+            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary-foreground mr-2"></div>
           )}
           {saveStatus === "saved" && <CheckCircle className="h-4 w-4 mr-2" />}
           {saveStatus === "error" && <AlertCircle className="h-4 w-4 mr-2" />}
@@ -324,7 +325,7 @@ export default function SettingsPage() {
 
       {/* Save Status Indicator */}
       {saveStatus === "saved" && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
+        <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded-lg">
           <div className="flex items-center">
             <CheckCircle className="h-5 w-5 mr-2" />
             All settings have been saved to the PostgreSQL database!
@@ -333,7 +334,7 @@ export default function SettingsPage() {
       )}
 
       {saveStatus === "error" && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg">
           <div className="flex items-center">
             <AlertCircle className="h-5 w-5 mr-2" />
             Error saving to database. Please check your connection and try again.
@@ -351,15 +352,15 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="departments" className="space-y-6">
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground">
                 <Building className="h-5 w-5" />
                 Department Management
-                <Badge variant="outline" className="ml-2">
+                <Badge variant="outline" className="ml-2 border-border">
                   {departments.length} departments
                 </Badge>
-                <Badge className="bg-blue-100 text-blue-800 ml-2">
+                <Badge className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 ml-2">
                   <Database className="h-3 w-3 mr-1" />
                   PostgreSQL
                 </Badge>
@@ -367,28 +368,29 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center">
-                <p className="text-gray-600">Manage organizational departments stored in PostgreSQL database</p>
+                <p className="text-muted-foreground">Manage organizational departments stored in PostgreSQL database</p>
                 <Dialog open={isAddDepartmentOpen} onOpenChange={setIsAddDepartmentOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-primary hover:bg-primary-dark text-dark">
+                    <Button className="bg-primary hover:bg-primary-dark text-primary-foreground">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Department
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-md bg-white">
+                  <DialogContent className="max-w-md bg-background border-border">
                     <DialogHeader>
-                      <DialogTitle>Add New Department</DialogTitle>
-                      <DialogDescription>Create a new department in the database</DialogDescription>
+                      <DialogTitle className="text-foreground">Add New Department</DialogTitle>
+                      <DialogDescription className="text-muted-foreground">Create a new department in the database</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="dept-name">Department Name</Label>
+                        <Label htmlFor="dept-name" className="text-foreground">Department Name</Label>
                         <Input
                           id="dept-name"
                           placeholder="e.g., Marketing"
                           value={newDepartmentName}
                           onChange={(e) => setNewDepartmentName(e.target.value)}
                           onKeyPress={(e) => e.key === "Enter" && handleAddDepartment()}
+                          className="bg-background text-foreground border-border"
                         />
                       </div>
                     </div>
@@ -398,7 +400,7 @@ export default function SettingsPage() {
                       </Button>
                       <Button
                         onClick={handleAddDepartment}
-                        className="bg-primary hover:bg-primary-dark text-dark"
+                        className="bg-primary hover:bg-primary-dark text-primary-foreground"
                         disabled={!newDepartmentName.trim() || saveStatus === "saving"}
                       >
                         {saveStatus === "saving" ? "Saving..." : "Add Department"}
@@ -410,12 +412,12 @@ export default function SettingsPage() {
 
               <div className="space-y-3">
                 {departments.map((dept) => (
-                  <div key={dept.id} className="border rounded-lg p-4">
+                  <div key={dept.id} className="border border-border rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-semibold">{dept.name}</h3>
-                        <p className="text-sm text-gray-600">{dept.employee_count} employees</p>
-                        <p className="text-xs text-blue-600">ID: {dept.id} • Database Record</p>
+                        <h3 className="font-semibold text-foreground">{dept.name}</h3>
+                        <p className="text-sm text-muted-foreground">{dept.employee_count} employees</p>
+                        <p className="text-xs text-primary">ID: {dept.id} • Database Record</p>
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleEditDepartment(dept)}>
@@ -430,7 +432,7 @@ export default function SettingsPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDeleteDepartment(dept.id)}
-                          className="text-red-600 hover:text-red-700"
+                          className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                         >
                           Delete
                         </Button>
@@ -438,7 +440,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {dept.permissions?.map((permission: string) => (
-                        <Badge key={permission} variant="outline" className="text-xs">
+                        <Badge key={permission} variant="outline" className="text-xs border-border">
                           {permission.replace("_", " ")}
                         </Badge>
                       ))}
@@ -451,29 +453,31 @@ export default function SettingsPage() {
 
           {/* Edit Department Dialog */}
           <Dialog open={isEditDepartmentOpen} onOpenChange={setIsEditDepartmentOpen}>
-            <DialogContent className="max-w-md bg-white">
+            <DialogContent className="max-w-md bg-background border-border">
               <DialogHeader>
-                <DialogTitle>Edit Department</DialogTitle>
-                <DialogDescription>Modify department information in database</DialogDescription>
+                <DialogTitle className="text-foreground">Edit Department</DialogTitle>
+                <DialogDescription className="text-muted-foreground">Modify department information in database</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-dept-name">Department Name</Label>
+                  <Label htmlFor="edit-dept-name" className="text-foreground">Department Name</Label>
                   <Input
                     id="edit-dept-name"
                     value={editDepartmentName}
                     onChange={(e) => setEditDepartmentName(e.target.value)}
                     placeholder="Department name"
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-employees">Number of Employees</Label>
+                  <Label htmlFor="edit-employees" className="text-foreground">Number of Employees</Label>
                   <Input
                     id="edit-employees"
                     type="number"
                     value={editEmployeeCount}
                     onChange={(e) => setEditEmployeeCount(Number.parseInt(e.target.value) || 0)}
                     placeholder="0"
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
               </div>
@@ -483,7 +487,7 @@ export default function SettingsPage() {
                 </Button>
                 <Button
                   onClick={handleSaveEditDepartment}
-                  className="bg-primary hover:bg-primary-dark text-dark"
+                  className="bg-primary hover:bg-primary-dark text-primary-foreground"
                   disabled={!editDepartmentName.trim() || saveStatus === "saving"}
                 >
                   {saveStatus === "saving" ? "Saving..." : "Save Changes"}
@@ -494,10 +498,10 @@ export default function SettingsPage() {
 
           {/* Permissions Dialog */}
           <Dialog open={isPermissionsOpen} onOpenChange={setIsPermissionsOpen}>
-            <DialogContent className="max-w-lg bg-white">
+            <DialogContent className="max-w-lg bg-background border-border">
               <DialogHeader>
-                <DialogTitle>Manage Permissions</DialogTitle>
-                <DialogDescription>Configure permissions for {selectedDepartment?.name} in database</DialogDescription>
+                <DialogTitle className="text-foreground">Manage Permissions</DialogTitle>
+                <DialogDescription className="text-muted-foreground">Configure permissions for {selectedDepartment?.name} in database</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3 max-h-60 overflow-y-auto">
@@ -508,15 +512,15 @@ export default function SettingsPage() {
                         id={permission}
                         checked={selectedPermissions.includes(permission)}
                         onChange={() => togglePermission(permission)}
-                        className="rounded"
+                        className="rounded border-border text-primary focus:ring-primary"
                       />
-                      <Label htmlFor={permission} className="text-sm cursor-pointer">
+                      <Label htmlFor={permission} className="text-sm cursor-pointer text-foreground">
                         {permission.replace("_", " ")}
                       </Label>
                     </div>
                   ))}
                 </div>
-                <div className="text-sm text-gray-600">Selected: {selectedPermissions.length} permissions</div>
+                <div className="text-sm text-muted-foreground">Selected: {selectedPermissions.length} permissions</div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsPermissionsOpen(false)}>
@@ -524,7 +528,7 @@ export default function SettingsPage() {
                 </Button>
                 <Button
                   onClick={handleSavePermissions}
-                  className="bg-primary hover:bg-primary-dark text-dark"
+                  className="bg-primary hover:bg-primary-dark text-primary-foreground"
                   disabled={saveStatus === "saving"}
                 >
                   {saveStatus === "saving" ? "Saving..." : "Save Permissions"}
@@ -535,11 +539,11 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="general" className="space-y-6">
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground">
                 Organization Settings
-                <Badge className="bg-blue-100 text-blue-800 ml-2">
+                <Badge className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 ml-2">
                   <Database className="h-3 w-3 mr-1" />
                   PostgreSQL
                 </Badge>
@@ -548,56 +552,61 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="org-name">Organization Name</Label>
+                  <Label htmlFor="org-name" className="text-foreground">Organization Name</Label>
                   <Input
                     id="org-name"
                     value={orgSettings.org_name}
                     onChange={(e) => handleOrgSettingChange("org_name", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="org-domain">Domain</Label>
+                  <Label htmlFor="org-domain" className="text-foreground">Domain</Label>
                   <Input
                     id="org-domain"
                     value={orgSettings.org_domain}
                     onChange={(e) => handleOrgSettingChange("org_domain", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="org-address">Business Address</Label>
+                <Label htmlFor="org-address" className="text-foreground">Business Address</Label>
                 <Textarea
                   id="org-address"
                   value={orgSettings.org_address}
                   onChange={(e) => handleOrgSettingChange("org_address", e.target.value)}
+                  className="bg-background text-foreground border-border"
                 />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="support-email">Support Email</Label>
+                  <Label htmlFor="support-email" className="text-foreground">Support Email</Label>
                   <Input
                     id="support-email"
                     value={orgSettings.support_email}
                     onChange={(e) => handleOrgSettingChange("support_email", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="admin-email">Admin Email</Label>
+                  <Label htmlFor="admin-email" className="text-foreground">Admin Email</Label>
                   <Input
                     id="admin-email"
                     value={orgSettings.admin_email}
                     onChange={(e) => handleOrgSettingChange("admin_email", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground">
                 <Settings className="h-5 w-5" />
                 Appearance Settings
-                <Badge className="bg-blue-100 text-blue-800 ml-2">
+                <Badge className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 ml-2">
                   <Database className="h-3 w-3 mr-1" />
                   Local Storage
                 </Badge>
@@ -605,7 +614,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Theme Preference</Label>
+                <Label className="text-foreground">Theme Preference</Label>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
                     Choose between light and dark mode for the portal interface
@@ -613,59 +622,59 @@ export default function SettingsPage() {
                   <ThemeToggle />
                 </div>
               </div>
-              <div className="text-xs text-gray-500">Theme preference is saved locally in your browser</div>
+              <div className="text-xs text-muted-foreground">Theme preference is saved locally in your browser</div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-6">
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground">
                 <Bell className="h-5 w-5" />
                 Notification Preferences
-                <Badge className="bg-blue-100 text-blue-800 ml-2">
+                <Badge className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 ml-2">
                   <Database className="h-3 w-3 mr-1" />
                   PostgreSQL
                 </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600">Notification settings will be stored in the database per user.</p>
+              <p className="text-muted-foreground">Notification settings will be stored in the database per user.</p>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="security" className="space-y-6">
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground">
                 <Shield className="h-5 w-5" />
                 Security Policies
-                <Badge className="bg-blue-100 text-blue-800 ml-2">
+                <Badge className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 ml-2">
                   <Database className="h-3 w-3 mr-1" />
                   PostgreSQL
                 </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600">Security settings will be stored in the security_settings table.</p>
+              <p className="text-muted-foreground">Security settings will be stored in the security_settings table.</p>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="system" className="space-y-6">
-          <Card>
+          <Card className="border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground">
                 <Database className="h-5 w-5" />
                 Database Information
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                <h3 className="font-semibold text-blue-900 mb-2">PostgreSQL Database Schema</h3>
-                <div className="text-sm text-blue-800 space-y-1">
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+                <h3 className="font-semibold text-blue-700 dark:text-blue-300 mb-2">PostgreSQL Database Schema</h3>
+                <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
                   <p>
                     • <strong>organization_settings</strong> - Company configuration
                   </p>
@@ -687,9 +696,9 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-                <h3 className="font-semibold text-green-900 mb-2">Current Status</h3>
-                <div className="text-sm text-green-800 space-y-1">
+              <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4 rounded-lg">
+                <h3 className="font-semibold text-green-700 dark:text-green-300 mb-2">Current Status</h3>
+                <div className="text-sm text-green-700 dark:text-green-300 space-y-1">
                   <p>✅ Database tables created</p>
                   <p>✅ API endpoints configured</p>
                   <p>✅ Real-time data persistence</p>
