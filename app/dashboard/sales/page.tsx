@@ -1,3 +1,4 @@
+// File: app/dashboard/sales/page.tsx
 "use client"
 
 import type React from "react"
@@ -37,7 +38,7 @@ export default function SalesPage() {
   const [editProspect, setEditProspect] = useState<any>(null)
   const [showEditModal, setShowEditModal] = useState(false)
   
-  // ✅ NEW: Search and Sort States
+  // ✅ Search and Sort States
   const [searchQuery, setSearchQuery] = useState("")
   const [sortField, setSortField] = useState<string>("created_at")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
@@ -102,27 +103,29 @@ export default function SalesPage() {
     loadData() // Refresh the data
   }
 
+  // ✅ FIXED: Theme-aware status colors
   const getStatusColor = (status: string) => {
     const colors = {
-      new: "bg-blue-100 text-blue-800",
-      contacted: "bg-yellow-100 text-yellow-800",
-      qualified: "bg-green-100 text-green-800",
-      proposal: "bg-purple-100 text-purple-800",
-      negotiation: "bg-orange-100 text-orange-800",
-      converted: "bg-green-100 text-green-800",
-      lost: "bg-red-100 text-red-800",
+      new: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20",
+      contacted: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/20",
+      qualified: "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20",
+      proposal: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20",
+      negotiation: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20",
+      converted: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
+      lost: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20",
     }
-    return colors[status as keyof typeof colors] || "bg-gray-100 text-gray-800"
+    return colors[status as keyof typeof colors] || "bg-muted text-muted-foreground border-border"
   }
 
+  // ✅ FIXED: Theme-aware priority colors
   const getPriorityColor = (priority: string) => {
     const colors = {
-      low: "bg-gray-100 text-gray-800",
-      medium: "bg-blue-100 text-blue-800",
-      high: "bg-orange-100 text-orange-800",
-      urgent: "bg-red-100 text-red-800",
+      low: "bg-muted text-muted-foreground border-border",
+      medium: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20",
+      high: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20",
+      urgent: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20",
     }
-    return colors[priority as keyof typeof colors] || "bg-gray-100 text-gray-800"
+    return colors[priority as keyof typeof colors] || "bg-muted text-muted-foreground border-border"
   }
 
   const handleSort = (field: string) => {
@@ -134,7 +137,7 @@ export default function SalesPage() {
     }
   }
 
-  // ✅ NEW: Enhanced filtering and sorting with useMemo for performance
+  // ✅ Enhanced filtering and sorting with useMemo for performance
   const filteredAndSortedProspects = useMemo(() => {
     let filtered = [...prospects]
 
@@ -201,7 +204,7 @@ export default function SalesPage() {
     return filtered
   }, [prospects, searchQuery, statusFilter, priorityFilter, sortField, sortDirection])
 
-  // ✅ NEW: Clear all filters
+  // ✅ Clear all filters
   const clearFilters = () => {
     setSearchQuery("")
     setStatusFilter("all")
@@ -210,7 +213,7 @@ export default function SalesPage() {
     setSortDirection("desc")
   }
 
-  // ✅ NEW: Get unique values for filter dropdowns
+  // ✅ Get unique values for filter dropdowns
   const uniqueStatuses = useMemo(() => {
     const statuses = new Set(prospects.map((p: any) => p.status))
     return Array.from(statuses).sort()
@@ -225,10 +228,10 @@ export default function SalesPage() {
     return (
       <div className="p-6">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="h-8 bg-muted rounded w-1/4 mb-6"></div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded"></div>
+              <div key={i} className="h-32 bg-muted rounded"></div>
             ))}
           </div>
         </div>
@@ -236,9 +239,10 @@ export default function SalesPage() {
     )
   }
 
+  // ✅ FIXED: Theme-aware sortable header
   const SortableHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
     <th
-      className="border border-gray-200 px-4 py-2 text-left cursor-pointer hover:bg-gray-100"
+      className="border border-border px-4 py-2 text-left cursor-pointer hover:bg-muted/50 text-foreground"
       onClick={() => handleSort(field)}
     >
       <div className="flex items-center gap-1">
@@ -252,11 +256,12 @@ export default function SalesPage() {
     </th>
   )
 
+  // ✅ FIXED: Theme-aware table view
   const renderTableView = () => (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse border border-gray-200">
+      <table className="w-full border-collapse border border-border">
         <thead>
-          <tr className="bg-gray-50">
+          <tr className="bg-muted/50">
             <SortableHeader field="business_name">Business</SortableHeader>
             <SortableHeader field="contact_name">Contact</SortableHeader>
             <SortableHeader field="assigned_salesperson_name">Salesperson</SortableHeader>
@@ -264,43 +269,43 @@ export default function SalesPage() {
             <SortableHeader field="priority">Priority</SortableHeader>
             <SortableHeader field="estimated_value">Value</SortableHeader>
             <SortableHeader field="created_at">Created</SortableHeader>
-            <th className="border border-gray-200 px-4 py-2 text-left">Actions</th>
+            <th className="border border-border px-4 py-2 text-left text-foreground">Actions</th>
           </tr>
         </thead>
         <tbody>
           {filteredAndSortedProspects.map((prospect: any) => (
-            <tr key={prospect.id} className="hover:bg-gray-50">
-              <td className="border border-gray-200 px-4 py-2">
-                <div className="font-medium">{prospect.business_name}</div>
+            <tr key={prospect.id} className="hover:bg-muted/30 transition-colors">
+              <td className="border border-border px-4 py-2">
+                <div className="font-medium text-foreground">{prospect.business_name}</div>
                 {prospect.formatted_address && (
-                  <div className="text-sm text-gray-600">{prospect.formatted_address}</div>
+                  <div className="text-sm text-muted-foreground">{prospect.formatted_address}</div>
                 )}
               </td>
-              <td className="border border-gray-200 px-4 py-2">
-                {prospect.contact_name && <div>{prospect.contact_name}</div>}
-                {prospect.contact_email && <div className="text-sm text-gray-600">{prospect.contact_email}</div>}
+              <td className="border border-border px-4 py-2">
+                {prospect.contact_name && <div className="text-foreground">{prospect.contact_name}</div>}
+                {prospect.contact_email && <div className="text-sm text-muted-foreground">{prospect.contact_email}</div>}
               </td>
-              <td className="border border-gray-200 px-4 py-2">
-                <div className="font-medium">{prospect.assigned_salesperson_name}</div>
-                <div className="text-sm text-gray-600">{prospect.assigned_salesperson_role}</div>
+              <td className="border border-border px-4 py-2">
+                <div className="font-medium text-foreground">{prospect.assigned_salesperson_name}</div>
+                <div className="text-sm text-muted-foreground">{prospect.assigned_salesperson_role}</div>
               </td>
-              <td className="border border-gray-200 px-4 py-2">
-                <Badge className={getStatusColor(prospect.status)}>{prospect.status}</Badge>
+              <td className="border border-border px-4 py-2">
+                <Badge variant="outline" className={getStatusColor(prospect.status)}>{prospect.status}</Badge>
               </td>
-              <td className="border border-gray-200 px-4 py-2">
-                <Badge className={getPriorityColor(prospect.priority)}>{prospect.priority}</Badge>
+              <td className="border border-border px-4 py-2">
+                <Badge variant="outline" className={getPriorityColor(prospect.priority)}>{prospect.priority}</Badge>
               </td>
-              <td className="border border-gray-200 px-4 py-2">
+              <td className="border border-border px-4 py-2">
                 {prospect.estimated_value > 0 && (
-                  <div className="font-semibold text-green-600">
+                  <div className="font-semibold text-emerald-600 dark:text-emerald-400">
                     ${Number(prospect.estimated_value).toLocaleString()}
                   </div>
                 )}
               </td>
-              <td className="border border-gray-200 px-4 py-2">
-                <div className="text-sm">{new Date(prospect.created_at).toLocaleDateString()}</div>
+              <td className="border border-border px-4 py-2">
+                <div className="text-sm text-muted-foreground">{new Date(prospect.created_at).toLocaleDateString()}</div>
               </td>
-              <td className="border border-gray-200 px-4 py-2">
+              <td className="border border-border px-4 py-2">
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => handleEditProspect(prospect)}>
                     <Edit className="h-3 w-3" />
@@ -308,7 +313,7 @@ export default function SalesPage() {
                   {prospect.status !== "converted" && prospect.status !== "lost" && (
                     <Button
                       size="sm"
-                      className="bg-green-600 hover:bg-green-700"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
                       onClick={() => handleConvertProspect(prospect)}
                     >
                       Convert
@@ -323,55 +328,62 @@ export default function SalesPage() {
     </div>
   )
 
+  // ✅ FIXED: Theme-aware card view
   const renderCardView = () => (
     <div className="space-y-4">
       {filteredAndSortedProspects.map((prospect: any) => (
-        <div key={prospect.id} className="border rounded-lg p-4 hover:bg-gray-50">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="font-semibold">{prospect.business_name}</h3>
-                <Badge className={getStatusColor(prospect.status)}>{prospect.status}</Badge>
-                <Badge className={getPriorityColor(prospect.priority)}>{prospect.priority}</Badge>
+        <Card key={prospect.id} className="hover:bg-muted/30 transition-colors">
+          <CardContent className="p-4">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="font-semibold text-foreground">{prospect.business_name}</h3>
+                  <Badge variant="outline" className={getStatusColor(prospect.status)}>{prospect.status}</Badge>
+                  <Badge variant="outline" className={getPriorityColor(prospect.priority)}>{prospect.priority}</Badge>
+                </div>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  {prospect.contact_name && <div>Contact: {prospect.contact_name}</div>}
+                  {prospect.contact_email && <div>Email: {prospect.contact_email}</div>}
+                  {prospect.phone && <div>Phone: {prospect.phone}</div>}
+                  {prospect.formatted_address && <div>Address: {prospect.formatted_address}</div>}
+                  {viewAll && (
+                    <div className="font-medium text-primary">
+                      Assigned to: {prospect.assigned_salesperson_name} ({prospect.assigned_salesperson_role})
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="text-sm text-gray-600 space-y-1">
-                {prospect.contact_name && <div>Contact: {prospect.contact_name}</div>}
-                {prospect.contact_email && <div>Email: {prospect.contact_email}</div>}
-                {prospect.phone && <div>Phone: {prospect.phone}</div>}
-                {prospect.formatted_address && <div>Address: {prospect.formatted_address}</div>}
-                {viewAll && (
-                  <div className="font-medium text-blue-600">
-                    Assigned to: {prospect.assigned_salesperson_name} ({prospect.assigned_salesperson_role})
+              <div className="text-right flex flex-col items-end gap-2">
+                {prospect.estimated_value > 0 && (
+                  <div className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                    ${Number(prospect.estimated_value).toLocaleString()}
                   </div>
                 )}
-              </div>
-            </div>
-            <div className="text-right flex flex-col items-end gap-2">
-              {prospect.estimated_value > 0 && (
-                <div className="text-lg font-semibold text-green-600">
-                  ${Number(prospect.estimated_value).toLocaleString()}
-                </div>
-              )}
-              <div className="text-sm text-gray-500">Created: {new Date(prospect.created_at).toLocaleDateString()}</div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => handleEditProspect(prospect)}>
-                  <Edit className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-                {prospect.status !== "converted" && prospect.status !== "lost" && (
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700"
-                    onClick={() => handleConvertProspect(prospect)}
-                  >
-                    Convert to Client
+                <div className="text-sm text-muted-foreground">Created: {new Date(prospect.created_at).toLocaleDateString()}</div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handleEditProspect(prospect)}>
+                    <Edit className="h-3 w-3 mr-1" />
+                    Edit
                   </Button>
-                )}
+                  {prospect.status !== "converted" && prospect.status !== "lost" && (
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={() => handleConvertProspect(prospect)}
+                    >
+                      Convert to Client
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          {prospect.notes && <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-2 rounded">{prospect.notes}</div>}
-        </div>
+            {prospect.notes && (
+              <div className="mt-3 text-sm text-muted-foreground bg-muted/50 p-2 rounded border">
+                {prospect.notes}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       ))}
     </div>
   )
@@ -380,8 +392,8 @@ export default function SalesPage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Sales Pipeline</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl font-bold text-foreground">Sales Pipeline</h1>
+          <p className="text-muted-foreground">
             Manage prospects and track sales performance
             {viewAll ? " (All Prospects)" : " (My Prospects)"}
           </p>
@@ -397,31 +409,35 @@ export default function SalesPage() {
         />
       </div>
 
-      {/* View Controls */}
-      <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
-        <div className="flex items-center gap-4">
-          {canViewAll && (
-            <div className="flex items-center space-x-2">
-              <Switch id="view-all" checked={viewAll} onCheckedChange={setViewAll} />
-              <Label htmlFor="view-all">View All Prospects</Label>
+      {/* ✅ FIXED: Theme-aware view controls */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {canViewAll && (
+                <div className="flex items-center space-x-2">
+                  <Switch id="view-all" checked={viewAll} onCheckedChange={setViewAll} />
+                  <Label htmlFor="view-all" className="text-foreground">View All Prospects</Label>
+                </div>
+              )}
+              <div className="text-sm text-muted-foreground">
+                Role: <span className="font-medium text-foreground">{userRole}</span>
+              </div>
             </div>
-          )}
-          <div className="text-sm text-gray-600">
-            Role: <span className="font-medium">{userRole}</span>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant={viewMode === "cards" ? "default" : "outline"} size="sm" onClick={() => setViewMode("cards")}>
-            <Grid className="h-4 w-4 mr-1" />
-            Cards
-          </Button>
-          <Button variant={viewMode === "table" ? "default" : "outline"} size="sm" onClick={() => setViewMode("table")}>
-            <List className="h-4 w-4 mr-1" />
-            Table
-          </Button>
-        </div>
-      </div>
+            <div className="flex items-center gap-2">
+              <Button variant={viewMode === "cards" ? "default" : "outline"} size="sm" onClick={() => setViewMode("cards")}>
+                <Grid className="h-4 w-4 mr-1" />
+                Cards
+              </Button>
+              <Button variant={viewMode === "table" ? "default" : "outline"} size="sm" onClick={() => setViewMode("table")}>
+                <List className="h-4 w-4 mr-1" />
+                Table
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -495,12 +511,12 @@ export default function SalesPage() {
             )}
           </div>
 
-          {/* ✅ NEW: Search and Filter Controls */}
+          {/* ✅ FIXED: Search and filter controls with light dropdown backgrounds */}
           {prospects.length > 0 && (
             <div className="space-y-4 pt-4">
               {/* Search Bar */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search by business name, contact, address, notes..."
                   value={searchQuery}
@@ -523,19 +539,19 @@ export default function SalesPage() {
               <div className="flex flex-wrap items-center gap-4">
                 {/* Sort By */}
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">Sort by:</Label>
+                  <Label className="text-sm font-medium text-foreground">Sort by:</Label>
                   <Select value={sortField} onValueChange={setSortField}>
-                    <SelectTrigger className="w-40">
+                    <SelectTrigger className="w-40 bg-background text-foreground border-border">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="business_name">Business Name</SelectItem>
-                      <SelectItem value="contact_name">Contact Name</SelectItem>
-                      <SelectItem value="created_at">Created Date</SelectItem>
-                      <SelectItem value="estimated_value">Value</SelectItem>
-                      <SelectItem value="status">Status</SelectItem>
-                      <SelectItem value="priority">Priority</SelectItem>
-                      <SelectItem value="assigned_salesperson_name">Salesperson</SelectItem>
+                    <SelectContent className="bg-white border-gray-300">
+                      <SelectItem value="business_name" className="text-black hover:bg-gray-100">Business Name</SelectItem>
+                      <SelectItem value="contact_name" className="text-black hover:bg-gray-100">Contact Name</SelectItem>
+                      <SelectItem value="created_at" className="text-black hover:bg-gray-100">Created Date</SelectItem>
+                      <SelectItem value="estimated_value" className="text-black hover:bg-gray-100">Value</SelectItem>
+                      <SelectItem value="status" className="text-black hover:bg-gray-100">Status</SelectItem>
+                      <SelectItem value="priority" className="text-black hover:bg-gray-100">Priority</SelectItem>
+                      <SelectItem value="assigned_salesperson_name" className="text-black hover:bg-gray-100">Salesperson</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
@@ -549,15 +565,15 @@ export default function SalesPage() {
 
                 {/* Status Filter */}
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">Status:</Label>
+                  <Label className="text-sm font-medium text-foreground">Status:</Label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-32 bg-background text-foreground border-border">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
+                    <SelectContent className="bg-white border-gray-300">
+                      <SelectItem value="all" className="text-black hover:bg-gray-100">All Status</SelectItem>
                       {uniqueStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
+                        <SelectItem key={status} value={status} className="text-black hover:bg-gray-100">
                           {status.charAt(0).toUpperCase() + status.slice(1)}
                         </SelectItem>
                       ))}
@@ -567,15 +583,15 @@ export default function SalesPage() {
 
                 {/* Priority Filter */}
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">Priority:</Label>
+                  <Label className="text-sm font-medium text-foreground">Priority:</Label>
                   <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-32 bg-background text-foreground border-border">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Priority</SelectItem>
+                    <SelectContent className="bg-white border-gray-300">
+                      <SelectItem value="all" className="text-black hover:bg-gray-100">All Priority</SelectItem>
                       {uniquePriorities.map((priority) => (
-                        <SelectItem key={priority} value={priority}>
+                        <SelectItem key={priority} value={priority} className="text-black hover:bg-gray-100">
                           {priority.charAt(0).toUpperCase() + priority.slice(1)}
                         </SelectItem>
                       ))}
@@ -592,7 +608,7 @@ export default function SalesPage() {
                 )}
 
                 {/* Results Counter */}
-                <div className="text-sm text-gray-600 ml-auto">
+                <div className="text-sm text-muted-foreground ml-auto">
                   Showing {filteredAndSortedProspects.length} of {prospects.length} prospects
                 </div>
               </div>
@@ -602,15 +618,15 @@ export default function SalesPage() {
         <CardContent>
           {prospects.length === 0 ? (
             <div className="text-center py-12">
-              <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No prospects yet</h3>
-              <p className="text-gray-600 mb-4">Start building your sales pipeline by adding your first prospect.</p>
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No prospects yet</h3>
+              <p className="text-muted-foreground mb-4">Start building your sales pipeline by adding your first prospect.</p>
             </div>
           ) : filteredAndSortedProspects.length === 0 ? (
             <div className="text-center py-12">
-              <Filter className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No prospects match your filters</h3>
-              <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria.</p>
+              <Filter className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No prospects match your filters</h3>
+              <p className="text-muted-foreground mb-4">Try adjusting your search or filter criteria.</p>
               <Button variant="outline" onClick={clearFilters}>
                 Clear All Filters
               </Button>

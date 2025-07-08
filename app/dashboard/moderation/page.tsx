@@ -1,3 +1,4 @@
+// File: app/dashboard/moderation/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -84,7 +85,7 @@ function SimpleCheckbox({
       type="checkbox"
       checked={checked}
       onChange={(e) => onCheckedChange(e.target.checked)}
-      className={`h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${className}`}
+      className={`h-4 w-4 rounded border-border text-primary focus:ring-primary ${className}`}
     />
   )
 }
@@ -111,9 +112,9 @@ function SimpleAlertDialog({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h2 className="text-lg font-semibold mb-2">{title}</h2>
-        <p className="text-gray-600 mb-4">{description}</p>
+      <div className="bg-background border-border rounded-lg p-6 max-w-md w-full">
+        <h2 className="text-lg font-semibold mb-2 text-foreground">{title}</h2>
+        <p className="text-muted-foreground mb-4">{description}</p>
         <div className="flex gap-2 justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {cancelText}
@@ -319,11 +320,11 @@ export default function ContentModerationPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      pending: { color: "bg-yellow-100 text-yellow-800", icon: Clock },
-      approved: { color: "bg-green-100 text-green-800", icon: CheckCircle },
-      flagged: { color: "bg-red-100 text-red-800", icon: Flag },
-      rejected: { color: "bg-gray-100 text-gray-800", icon: XCircle },
-      deleted: { color: "bg-red-100 text-red-800", icon: Trash2 },
+      pending: { color: "bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800", icon: Clock },
+      approved: { color: "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800", icon: CheckCircle },
+      flagged: { color: "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800", icon: Flag },
+      rejected: { color: "bg-gray-50 dark:bg-gray-950/20 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800", icon: XCircle },
+      deleted: { color: "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800", icon: Trash2 },
     }
 
     const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
@@ -353,7 +354,7 @@ export default function ContentModerationPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading content moderation...</p>
+          <p className="text-muted-foreground">Loading content moderation...</p>
         </div>
       </div>
     )
@@ -363,10 +364,10 @@ export default function ContentModerationPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-dark">Content Moderation</h1>
+          <h1 className="text-3xl font-bold text-foreground">Content Moderation</h1>
           <div className="flex items-center gap-2 mt-1">
-            <Shield className="h-4 w-4 text-blue-600" />
-            <span className="text-sm text-blue-600">Review and moderate user-generated content</span>
+            <Shield className="h-4 w-4 text-primary" />
+            <span className="text-sm text-primary">Review and moderate user-generated content</span>
           </div>
         </div>
         <div className="flex gap-2">
@@ -375,7 +376,7 @@ export default function ContentModerationPage() {
               <Button
                 variant="outline"
                 onClick={() => handleBulkModeration("approve")}
-                className="text-green-600 hover:text-green-700"
+                className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Approve ({selectedItems.size})
@@ -383,7 +384,7 @@ export default function ContentModerationPage() {
               <Button
                 variant="outline"
                 onClick={() => handleBulkModeration("reject")}
-                className="text-red-600 hover:text-red-700"
+                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
               >
                 <XCircle className="h-4 w-4 mr-2" />
                 Reject ({selectedItems.size})
@@ -396,57 +397,57 @@ export default function ContentModerationPage() {
       {/* Statistics Cards */}
       {stats && (
         <div className="grid gap-6 md:grid-cols-5">
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-yellow-600" />
+                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
                 <div>
-                  <div className="text-2xl font-bold">{stats.summary.totalPending}</div>
-                  <div className="text-sm text-gray-600">Pending Review</div>
+                  <div className="text-2xl font-bold text-foreground">{stats.summary.totalPending}</div>
+                  <div className="text-sm text-muted-foreground">Pending Review</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                 <div>
-                  <div className="text-2xl font-bold">{stats.summary.totalApproved}</div>
-                  <div className="text-sm text-gray-600">Approved</div>
+                  <div className="text-2xl font-bold text-foreground">{stats.summary.totalApproved}</div>
+                  <div className="text-sm text-muted-foreground">Approved</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Flag className="h-5 w-5 text-red-600" />
+                <Flag className="h-5 w-5 text-red-600 dark:text-red-400" />
                 <div>
-                  <div className="text-2xl font-bold">{stats.summary.totalFlagged}</div>
-                  <div className="text-sm text-gray-600">Flagged</div>
+                  <div className="text-2xl font-bold text-foreground">{stats.summary.totalFlagged}</div>
+                  <div className="text-sm text-muted-foreground">Flagged</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <XCircle className="h-5 w-5 text-gray-600" />
+                <XCircle className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <div className="text-2xl font-bold">{stats.summary.totalRejected}</div>
-                  <div className="text-sm text-gray-600">Rejected</div>
+                  <div className="text-2xl font-bold text-foreground">{stats.summary.totalRejected}</div>
+                  <div className="text-sm text-muted-foreground">Rejected</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <Trash2 className="h-5 w-5 text-red-600" />
+                <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
                 <div>
-                  <div className="text-2xl font-bold">{stats.summary.totalDeleted}</div>
-                  <div className="text-sm text-gray-600">Deleted</div>
+                  <div className="text-2xl font-bold text-foreground">{stats.summary.totalDeleted}</div>
+                  <div className="text-sm text-muted-foreground">Deleted</div>
                 </div>
               </div>
             </CardContent>
@@ -455,43 +456,43 @@ export default function ContentModerationPage() {
       )}
 
       {/* Filters and Search */}
-      <Card>
+      <Card className="border-border">
         <CardContent className="p-4">
           <div className="flex gap-4 items-center">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search content, users, or businesses..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-background text-foreground border-border"
                 />
               </div>
             </div>
             <Select value={contentTypeFilter} onValueChange={setContentTypeFilter}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48 bg-background text-foreground border-border">
                 <SelectValue placeholder="Content Type" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Content</SelectItem>
-                <SelectItem value="image">Images</SelectItem>
-                <SelectItem value="review">Reviews</SelectItem>
-                <SelectItem value="ad">Advertisements</SelectItem>
-                <SelectItem value="communication">Communications</SelectItem>
+              <SelectContent className="bg-white border-gray-300">
+                <SelectItem value="all" className="text-black hover:bg-gray-100">All Content</SelectItem>
+                <SelectItem value="image" className="text-black hover:bg-gray-100">Images</SelectItem>
+                <SelectItem value="review" className="text-black hover:bg-gray-100">Reviews</SelectItem>
+                <SelectItem value="ad" className="text-black hover:bg-gray-100">Advertisements</SelectItem>
+                <SelectItem value="communication" className="text-black hover:bg-gray-100">Communications</SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48 bg-background text-foreground border-border">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="flagged">Flagged</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="deleted">Deleted</SelectItem>
+              <SelectContent className="bg-white border-gray-300">
+                <SelectItem value="all" className="text-black hover:bg-gray-100">All Status</SelectItem>
+                <SelectItem value="pending" className="text-black hover:bg-gray-100">Pending</SelectItem>
+                <SelectItem value="approved" className="text-black hover:bg-gray-100">Approved</SelectItem>
+                <SelectItem value="flagged" className="text-black hover:bg-gray-100">Flagged</SelectItem>
+                <SelectItem value="rejected" className="text-black hover:bg-gray-100">Rejected</SelectItem>
+                <SelectItem value="deleted" className="text-black hover:bg-gray-100">Deleted</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -499,16 +500,16 @@ export default function ContentModerationPage() {
       </Card>
 
       {/* Content Items */}
-      <Card>
+      <Card className="border-border">
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex items-center justify-between text-foreground">
             <span>Content Items</span>
             <div className="flex items-center gap-2">
               <SimpleCheckbox
                 checked={selectedItems.size === items.length && items.length > 0}
                 onCheckedChange={handleSelectAll}
               />
-              <span className="text-sm text-gray-600">Select All</span>
+              <span className="text-sm text-muted-foreground">Select All</span>
             </div>
           </CardTitle>
         </CardHeader>
@@ -516,9 +517,9 @@ export default function ContentModerationPage() {
           <div className="space-y-4">
             {items.length === 0 ? (
               <div className="text-center py-8">
-                <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No content items found for moderation.</p>
-                <p className="text-sm text-gray-500 mt-2">
+                <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No content items found for moderation.</p>
+                <p className="text-sm text-muted-foreground mt-2">
                   Try adjusting your filters or check back later for new content.
                 </p>
               </div>
@@ -532,7 +533,7 @@ export default function ContentModerationPage() {
                 return (
                   <div
                     key={itemKey}
-                    className={`border rounded-lg p-4 ${isSelected ? "bg-blue-50 border-blue-200" : "hover:bg-gray-50"}`}
+                    className={`border border-border rounded-lg p-4 ${isSelected ? "bg-primary/10 border-primary/30" : "hover:bg-muted/30"}`}
                   >
                     <div className="flex items-start gap-4">
                       <SimpleCheckbox
@@ -543,17 +544,17 @@ export default function ContentModerationPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           {getContentTypeIcon(item.content_type)}
-                          <Badge variant="outline" className="capitalize">
+                          <Badge variant="outline" className="capitalize border-border">
                             {item.content_type}
                           </Badge>
                           {getStatusBadge(item.moderation_status)}
                           {messageCategoryName && (
-                            <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200">
+                            <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
                               <Tag className="h-3 w-3 mr-1" />
                               {messageCategoryName}
                             </Badge>
                           )}
-                          <span className="text-sm text-gray-500">ID: {item.id}</span>
+                          <span className="text-sm text-muted-foreground">ID: {item.id}</span>
                         </div>
 
                         <div className="mb-2">
@@ -562,22 +563,22 @@ export default function ContentModerationPage() {
                               <img
                                 src={item.content || "/placeholder.svg"}
                                 alt="Content"
-                                className="w-20 h-20 object-cover rounded border"
+                                className="w-20 h-20 object-cover rounded border border-border"
                                 onError={(e) => {
                                   ;(e.target as HTMLImageElement).src = "/placeholder.svg?height=80&width=80&text=Image"
                                 }}
                               />
                               <div>
-                                <p className="text-sm text-gray-600">Image URL:</p>
-                                <p className="text-sm font-mono break-all">{truncateContent(item.content, 80)}</p>
+                                <p className="text-sm text-muted-foreground">Image URL:</p>
+                                <p className="text-sm font-mono break-all text-foreground">{truncateContent(item.content, 80)}</p>
                               </div>
                             </div>
                           ) : (
-                            <p className="text-sm">{truncateContent(item.content, 200)}</p>
+                            <p className="text-sm text-foreground">{truncateContent(item.content, 200)}</p>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
                           {item.user_name && (
                             <div className="flex items-center gap-1">
                               <User className="h-3 w-3" />
@@ -603,8 +604,8 @@ export default function ContentModerationPage() {
                         </div>
 
                         {item.moderation_notes && (
-                          <div className="mt-2 p-2 bg-gray-100 rounded text-sm">
-                            <strong>Notes:</strong> {item.moderation_notes}
+                          <div className="mt-2 p-2 bg-muted rounded text-sm border border-border">
+                            <strong className="text-foreground">Notes:</strong> <span className="text-foreground">{item.moderation_notes}</span>
                           </div>
                         )}
                       </div>
@@ -614,7 +615,7 @@ export default function ContentModerationPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleIndividualModeration(item, "approve")}
-                          className="text-green-600 hover:text-green-700"
+                          className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
                         >
                           <CheckCircle className="h-4 w-4" />
                         </Button>
@@ -622,7 +623,7 @@ export default function ContentModerationPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleIndividualModeration(item, "reject")}
-                          className="text-red-600 hover:text-red-700"
+                          className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                         >
                           <XCircle className="h-4 w-4" />
                         </Button>
@@ -630,7 +631,7 @@ export default function ContentModerationPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleIndividualModeration(item, "flag")}
-                          className="text-orange-600 hover:text-orange-700"
+                          className="text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300"
                         >
                           <Flag className="h-4 w-4" />
                         </Button>
@@ -652,7 +653,7 @@ export default function ContentModerationPage() {
               >
                 Previous
               </Button>
-              <span className="flex items-center px-4">
+              <span className="flex items-center px-4 text-muted-foreground">
                 Page {currentPage} of {totalPages}
               </span>
               <Button
@@ -669,14 +670,14 @@ export default function ContentModerationPage() {
 
       {/* Moderation Dialog */}
       <Dialog open={isModerationDialogOpen} onOpenChange={setIsModerationDialogOpen}>
-        <DialogContent className="max-w-md bg-white">
+        <DialogContent className="max-w-md bg-background border-border">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-foreground">
               {isBulkAction
                 ? `${selectedAction} ${selectedItems.size} items`
                 : `${selectedAction} ${selectedItem?.content_type}`}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-muted-foreground">
               {isBulkAction
                 ? `You are about to ${selectedAction} ${selectedItems.size} selected items.`
                 : `You are about to ${selectedAction} this ${selectedItem?.content_type}.`}
@@ -685,12 +686,13 @@ export default function ContentModerationPage() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Moderation Notes (optional)</label>
+              <label className="text-sm font-medium text-foreground">Moderation Notes (optional)</label>
               <Textarea
                 placeholder="Add notes about this moderation action..."
                 value={moderationNotes}
                 onChange={(e) => setModerationNotes(e.target.value)}
                 rows={3}
+                className="bg-background text-foreground border-border"
               />
             </div>
           </div>

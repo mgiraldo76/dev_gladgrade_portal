@@ -1,3 +1,4 @@
+// File: /components/conversion-modal.tsx
 "use client"
 
 import type React from "react"
@@ -144,64 +145,68 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-background text-foreground border-border">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <User className="h-5 w-5" />
             Convert Prospect to Client
           </DialogTitle>
         </DialogHeader>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-start gap-2">
+          <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-md p-3 flex items-start gap-2">
             <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
             <div>
-              <div className="font-medium text-red-800">Error</div>
-              <div className="text-sm text-red-600 mt-1">{error}</div>
+              <div className="font-medium text-red-800 dark:text-red-300">Error</div>
+              <div className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</div>
             </div>
           </div>
         )}
 
         {success && (
-          <div className="bg-green-50 border border-green-200 rounded-md p-3 flex items-start gap-2">
+          <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md p-3 flex items-start gap-2">
             <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
             <div>
-              <div className="font-medium text-green-800">Success!</div>
-              <div className="text-sm text-green-600 mt-1">{success}</div>
+              <div className="font-medium text-green-800 dark:text-green-300">Success!</div>
+              <div className="text-sm text-green-600 dark:text-green-400 mt-1">{success}</div>
             </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Prospect Info */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="font-medium mb-2">Prospect Information</h3>
+          <div className="bg-muted/50 p-4 rounded-lg border border-border">
+            <h3 className="font-medium mb-2 text-foreground">Prospect Information</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="font-medium">Business:</span> {prospect?.business_name}
+                <span className="font-medium text-foreground">Business:</span> 
+                <span className="text-muted-foreground ml-1">{prospect?.business_name}</span>
               </div>
               <div>
-                <span className="font-medium">Status:</span> {prospect?.status}
+                <span className="font-medium text-foreground">Status:</span> 
+                <span className="text-muted-foreground ml-1">{prospect?.status}</span>
               </div>
               <div>
-                <span className="font-medium">Priority:</span> {prospect?.priority}
+                <span className="font-medium text-foreground">Priority:</span> 
+                <span className="text-muted-foreground ml-1">{prospect?.priority}</span>
               </div>
               <div>
-                <span className="font-medium">Estimated Value:</span> ${prospect?.estimated_value || 0}
+                <span className="font-medium text-foreground">Estimated Value:</span> 
+                <span className="text-muted-foreground ml-1">${prospect?.estimated_value || 0}</span>
               </div>
             </div>
           </div>
 
           {/* Sale Details */}
           <div className="space-y-4">
-            <h3 className="font-medium flex items-center gap-2">
+            <h3 className="font-medium flex items-center gap-2 text-foreground">
               <DollarSign className="h-4 w-4" />
               Conversion Details
             </h3>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="conversion_value">Final Sale Value ($) *</Label>
+                <Label htmlFor="conversion_value" className="text-foreground">Final Sale Value ($) *</Label>
                 <Input
                   id="conversion_value"
                   type="number"
@@ -210,18 +215,19 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
                   value={formData.conversion_value}
                   onChange={(e) => updateFormData("conversion_value", e.target.value)}
                   required
+                  className="bg-background text-foreground border-border"
                 />
               </div>
 
               <div>
-                <Label htmlFor="serviceId">Service Package (Optional)</Label>
+                <Label htmlFor="serviceId" className="text-foreground">Service Package (Optional)</Label>
                 <Select onValueChange={(value) => updateFormData("serviceId", value)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-background text-foreground border-border">
                     <SelectValue placeholder="Select service" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white border-gray-300">
                     {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
+                      <SelectItem key={service.id} value={service.id} className="text-black hover:bg-gray-100">
                         {service.name} - ${service.price} ({service.commission_rate * 100}% commission)
                       </SelectItem>
                     ))}
@@ -231,52 +237,55 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
             </div>
 
             {estimatedCommission > 0 && (
-              <div className="bg-green-50 p-3 rounded-lg">
-                <p className="text-green-800 font-medium">Estimated Commission: ${estimatedCommission.toFixed(2)}</p>
+              <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-3 rounded-lg">
+                <p className="text-green-800 dark:text-green-300 font-medium">Estimated Commission: ${estimatedCommission.toFixed(2)}</p>
               </div>
             )}
           </div>
 
           {/* Contact Details */}
           <div className="space-y-4">
-            <h3 className="font-medium">Client Contact Information</h3>
+            <h3 className="font-medium text-foreground">Client Contact Information</h3>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="client_contact_name">Contact Name *</Label>
+                <Label htmlFor="client_contact_name" className="text-foreground">Contact Name *</Label>
                 <Input
                   id="client_contact_name"
                   value={formData.client_contact_name}
                   onChange={(e) => updateFormData("client_contact_name", e.target.value)}
                   required
+                  className="bg-background text-foreground border-border"
                 />
               </div>
 
               <div>
-                <Label htmlFor="client_contact_email">Contact Email *</Label>
+                <Label htmlFor="client_contact_email" className="text-foreground">Contact Email *</Label>
                 <Input
                   id="client_contact_email"
                   type="email"
                   value={formData.client_contact_email}
                   onChange={(e) => updateFormData("client_contact_email", e.target.value)}
                   required
+                  className="bg-background text-foreground border-border"
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="contactPhone">Contact Phone (Optional)</Label>
+              <Label htmlFor="contactPhone" className="text-foreground">Contact Phone (Optional)</Label>
               <Input
                 id="contactPhone"
                 value={formData.contactPhone}
                 onChange={(e) => updateFormData("contactPhone", e.target.value)}
+                className="bg-background text-foreground border-border"
               />
             </div>
           </div>
 
           {/* Automation Options */}
           <div className="space-y-4">
-            <h3 className="font-medium">Automation Options</h3>
+            <h3 className="font-medium text-foreground">Automation Options</h3>
 
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
@@ -285,7 +294,7 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
                   checked={formData.send_welcome_email}
                   onCheckedChange={(checked) => updateFormData("send_welcome_email", !!checked)}
                 />
-                <Label htmlFor="send_welcome_email" className="flex items-center gap-2">
+                <Label htmlFor="send_welcome_email" className="flex items-center gap-2 text-foreground">
                   <Mail className="h-4 w-4" />
                   Send welcome email with portal access
                 </Label>
@@ -297,7 +306,7 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
                   checked={formData.generate_qr_codes}
                   onCheckedChange={(checked) => updateFormData("generate_qr_codes", !!checked)}
                 />
-                <Label htmlFor="generate_qr_codes" className="flex items-center gap-2">
+                <Label htmlFor="generate_qr_codes" className="flex items-center gap-2 text-foreground">
                   <QrCode className="h-4 w-4" />
                   Generate QR codes (business profile + menu)
                 </Label>
@@ -309,7 +318,7 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
                   checked={formData.create_firebase_account}
                   onCheckedChange={(checked) => updateFormData("create_firebase_account", !!checked)}
                 />
-                <Label htmlFor="create_firebase_account" className="flex items-center gap-2">
+                <Label htmlFor="create_firebase_account" className="flex items-center gap-2 text-foreground">
                   <User className="h-4 w-4" />
                   Create client portal account
                 </Label>
@@ -319,21 +328,22 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
 
           {/* Notes */}
           <div>
-            <Label htmlFor="notes">Conversion Notes (Optional)</Label>
+            <Label htmlFor="notes" className="text-foreground">Conversion Notes (Optional)</Label>
             <Textarea
               id="notes"
               placeholder="Add any notes about this conversion..."
               value={formData.notes}
               onChange={(e) => updateFormData("notes", e.target.value)}
+              className="bg-background text-foreground border-border"
             />
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700">
+            <Button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700 text-white">
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

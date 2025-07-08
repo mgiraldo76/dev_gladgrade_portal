@@ -1,3 +1,4 @@
+// File: components/sidebar.tsx
 "use client"
 
 import Link from "next/link"
@@ -57,43 +58,23 @@ export function Sidebar() {
               userInfo: data.userInfo
             })
           } else {
-            // Fallback: check employee record directly
-            const employeeResponse = await fetch(`/api/employees/check-access?email=${encodeURIComponent(user.email)}`)
-            if (employeeResponse.ok) {
-              const employeeData = await employeeResponse.json()
-              // Check if user is in Sales department or has leadership role
-              const hasSalesAccess = employeeData.department_name === "Sales" || 
-                                   ["CEO", "CCO", "Sales Manager", "Sales Director", "Sales Representative"].includes(employeeData.position_title)
-              setHasClientAccess(hasSalesAccess)
-            }
+            console.error("Failed to check client access:", response.statusText)
+            setHasClientAccess(false)
           }
         } catch (error) {
-          console.error("Access check failed:", error)
+          console.error("Error checking client access:", error)
           setHasClientAccess(false)
         }
       } else {
         setHasClientAccess(false)
       }
     }
-    
-    if (user?.email) {
-      checkClientAccess()
-    }
-  }, [role, user?.uid, user?.email])
 
-  // Function to check if user has sales access
-  const hasSalesAccess = () => {
-    // Super admin and admin always have access
-    if (role === "super_admin" || role === "admin") return true
+    checkClientAccess()
+  }, [role, user?.email])
 
-    // Employees can have sales access (we'll check department from database later)
-    if (role === "employee") return true
-
-    return false
-  }
-
-  // Define navigation items with enhanced role-based access
-  const navItems = [
+  // Define menu items with role-based access
+  const navigationItems = [
     {
       name: "Dashboard",
       href: "/dashboard",
@@ -101,7 +82,7 @@ export function Sidebar() {
       roles: ["super_admin", "admin", "client", "employee", "moderator"],
     },
     {
-      name: "Sales Pipeline",
+      name: "Sales",
       href: "/dashboard/sales",
       icon: TrendingUp,
       roles: ["super_admin", "admin", "employee"],
@@ -117,8 +98,8 @@ export function Sidebar() {
       name: "Clients",
       href: "/dashboard/clients",
       icon: Building,
-      roles: ["super_admin", "admin", "employee"], // Include employees
-      requiresClientAccess: true, // This is the key flag
+      roles: ["super_admin", "admin", "employee"],
+      requiresClientAccess: true,
     },
     {
       name: "Reports",
@@ -170,75 +151,92 @@ export function Sidebar() {
     },
   ]
 
-  // Enhanced filtering logic that considers both sales and client access
-  const filteredNavItems = navItems.filter((item) => {
-    const hasRoleAccess = role && item.roles.includes(role)
-  
+  // Filter navigation items based on user role and access
+  const filteredNavigation = navigationItems.filter((item) => {
+    // Check role access
+    if (!role || !item.roles.includes(role)) {
+      return false
+    }
+
+    // Check special access requirements
+    if (item.requiresClientAccess && !hasClientAccess) {
+      return false
+    }
+
     if (item.requiresSalesAccess) {
-      return hasRoleAccess && hasSalesAccess()
+      // Sales access logic - you can customize this
+      return role === "super_admin" || role === "admin" || role === "employee"
     }
-  
-    // Check for client access requirement
-    if (item.requiresClientAccess) {
-      // Super admin and admin always have access
-      if (role === "super_admin" || role === "admin") {
-        return hasRoleAccess
-      }
-      // For employees, check the dynamic access
-      return hasRoleAccess && hasClientAccess
-    }
-  
-    return hasRoleAccess
+
+    return true
   })
 
-  return (
-    <aside className="fixed left-0 top-[73px] z-40 h-[calc(100vh-73px)] w-64 bg-white border-r border-gray-200 pt-6 transition-transform md:translate-x-0 sidebar-scrollbar overflow-y-auto">
-      <div className="h-full px-3 pb-4">
-        {/* Role indicator */}
-        {role && (
-          <div className="mb-4 p-3 bg-primary/10 rounded-lg">
-            <div className="flex items-center gap-2">
-              {role === "super_admin" && <Crown className="h-4 w-4 text-primary" />}
-              {role === "admin" && <ShieldCheck className="h-4 w-4 text-blue-600" />}
-              {role === "moderator" && <ImageIcon className="h-4 w-4 text-green-600" />}
-              {role === "employee" && <User className="h-4 w-4 text-gray-600" />}
-              {role === "client" && <Users className="h-4 w-4 text-purple-600" />}
-              <span className="text-sm font-medium capitalize">
-                {role === "super_admin" ? "Super Admin" : role.replace("_", " ")}
-              </span>
-            </div>
-            {/* Show client access indicator for employees */}
-            {role === "employee" && hasClientAccess && (
-              <div className="mt-1 text-xs text-green-600">
-                ✓ Client Access Enabled
-              </div>
-            )}
-          </div>
-        )}
+  const getRoleBadgeInfo = () => {
+    switch (role) {
+      case "super_admin":
+        return { text: "Super Admin", className: "bg-purple-100 text-purple-800" }
+      case "admin":
+        return { text: "Admin", className: "bg-blue-100 text-blue-800" }
+      case "employee":
+        return { text: "Employee", className: "bg-green-100 text-green-800" }
+      case "moderator":
+        return { text: "Moderator", className: "bg-yellow-100 text-yellow-800" }
+      case "client":
+        return { text: "Client", className: "bg-gray-100 text-gray-800" }
+      default:
+        return { text: "User", className: "bg-gray-100 text-gray-800" }
+    }
+  }
 
-        <ul className="space-y-2 font-medium">
-          {filteredNavItems.map((item) => (
-            <li key={item.name}>
+  const roleBadge = getRoleBadgeInfo()
+
+  return (
+    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-card border-r border-border sidebar-scrollbar overflow-y-auto">
+      <div className="p-4">
+        {/* User Info */}
+        <div className="flex items-center gap-3 mb-6 p-3 bg-muted rounded-lg">
+          <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+            <User className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">
+              {user?.email || "User"}
+            </p>
+            <div className="flex items-center gap-1 mt-1">
+              <div className={cn("px-2 py-0.5 rounded text-xs font-medium", roleBadge.className)}>
+                {roleBadge.text}
+              </div>
+              {role === "super_admin" && (
+                <Crown className="h-3 w-3 text-primary" />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="space-y-2">
+          {filteredNavigation.map((item) => {
+            const isActive = pathname === item.href
+            const Icon = item.icon
+
+            return (
               <Link
+                key={item.name}
                 href={item.href}
                 className={cn(
-                  "flex items-center p-3 rounded-lg group hover:bg-primary/10 transition-colors",
-                  pathname === item.href && "bg-primary/20 text-dark border-r-2 border-primary",
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 )}
               >
-                <item.icon
-                  className={cn(
-                    "w-5 h-5 transition",
-                    pathname === item.href ? "text-primary" : "text-gray-500 group-hover:text-primary",
-                  )}
-                />
-                <span className="ml-3">{item.name}</span>
-                {item.name === "System Admin" && <Crown className="ml-auto h-4 w-4 text-primary" />}
+                <Icon className="h-4 w-4" />
+                <span>{item.name}</span>
               </Link>
-            </li>
-          ))}
-        </ul>
+            )
+          })}
+        </nav>
       </div>
-    </aside>
+    </div>
   )
 }

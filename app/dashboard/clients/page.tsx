@@ -143,20 +143,20 @@ export default function ClientsPage() {
   // Helper function to get review count display
   const getReviewCountDisplay = (client: any) => {
     if (!client.place_id) {
-      return { count: "N/A", className: "text-gray-400", tooltip: "No Place ID available" }
+      return { count: "N/A", className: "text-muted-foreground", tooltip: "No Place ID available" }
     }
     
     if (loadingReviews) {
-      return { count: "...", className: "text-gray-400", tooltip: "Loading review count" }
+      return { count: "...", className: "text-muted-foreground", tooltip: "Loading review count" }
     }
     
     const reviewData = reviewCounts[client.place_id]
     if (!reviewData) {
-      return { count: "0", className: "text-gray-600", tooltip: "No reviews found" }
+      return { count: "0", className: "text-muted-foreground", tooltip: "No reviews found" }
     }
     
     const count = reviewData.total_reviews.toString()
-    const className = reviewData.total_reviews > 0 ? "text-blue-600 hover:text-blue-800 cursor-pointer" : "text-gray-600"
+    const className = reviewData.total_reviews > 0 ? "text-primary hover:text-primary/80 cursor-pointer" : "text-muted-foreground"
     const tooltip = `${reviewData.total_reviews} reviews • Avg: ${reviewData.average_rating || 'N/A'} • Recent: ${reviewData.recent_reviews}`
     
     return { count, className, tooltip }
@@ -165,32 +165,32 @@ export default function ClientsPage() {
   // Helper function to get GCSG display
   const getGCSGDisplay = (client: any) => {
     if (!client.place_id) {
-      return { score: "N/A", className: "text-gray-400", tooltip: "No Place ID available" }
+      return { score: "N/A", className: "text-muted-foreground", tooltip: "No Place ID available" }
     }
     
     if (loadingGCSG) {
-      return { score: "...", className: "text-gray-400", tooltip: "Loading GCSG score" }
+      return { score: "...", className: "text-muted-foreground", tooltip: "Loading GCSG score" }
     }
     
     const gcsgData = gcsgScores.get(client.place_id)
     if (!gcsgData) {
-      return { score: "N/A", className: "text-gray-400", tooltip: "GCSG score not available" }
+      return { score: "N/A", className: "text-muted-foreground", tooltip: "GCSG score not available" }
     }
     
     if (gcsgData.error) {
-      return { score: "Error", className: "text-red-500", tooltip: `Error: ${gcsgData.error}` }
+      return { score: "Error", className: "text-red-500 dark:text-red-400", tooltip: `Error: ${gcsgData.error}` }
     }
     
     if (gcsgData.score === null) {
-      return { score: "N/A", className: "text-gray-400", tooltip: "No GCSG score found" }
+      return { score: "N/A", className: "text-muted-foreground", tooltip: "No GCSG score found" }
     }
     
-    let className = "text-gray-600"
-    if (gcsgData.score >= 800) className = "text-green-600 font-semibold"
-    else if (gcsgData.score >= 700) className = "text-green-500"
-    else if (gcsgData.score >= 600) className = "text-yellow-600"
-    else if (gcsgData.score >= 500) className = "text-orange-500"
-    else className = "text-red-500"
+    let className = "text-muted-foreground"
+    if (gcsgData.score >= 800) className = "text-green-600 dark:text-green-400 font-semibold"
+    else if (gcsgData.score >= 700) className = "text-green-500 dark:text-green-400"
+    else if (gcsgData.score >= 600) className = "text-yellow-600 dark:text-yellow-400"
+    else if (gcsgData.score >= 500) className = "text-orange-500 dark:text-orange-400"
+    else className = "text-red-500 dark:text-red-400"
     
     const tooltip = `GCSG Score: ${gcsgData.score}${gcsgData.cached ? ' (cached)' : ''}`
     
@@ -294,7 +294,7 @@ export default function ClientsPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading business clients...</p>
+          <p className="text-muted-foreground">Loading business clients...</p>
         </div>
       </div>
     )
@@ -304,10 +304,10 @@ export default function ClientsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-dark">Business Clients</h1>
+          <h1 className="text-3xl font-bold text-foreground">Business Clients</h1>
           <div className="flex items-center gap-2 mt-1">
-            <Building className="h-4 w-4 text-blue-600" />
-            <span className="text-sm text-blue-600">GladGrade Portal Management</span>
+            <Building className="h-4 w-4 text-primary" />
+            <span className="text-sm text-primary">GladGrade Portal Management</span>
           </div>
         </div>
         <div className="flex gap-2">
@@ -330,30 +330,30 @@ export default function ClientsPage() {
       </div>
 
       {/* Search and Filters */}
-      <Card>
+      <Card className="border-border">
         <CardContent className="p-4">
           <div className="flex gap-4 items-end">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search by business name, contact, email, or address..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-background text-foreground border-border"
                 />
               </div>
             </div>
             
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-48 bg-background text-foreground border-border">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Businesses</SelectItem>
-                <SelectItem value="verified">Verified</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+              <SelectContent className="bg-white border-gray-300">
+                <SelectItem value="all" className="text-black hover:bg-gray-100">All Businesses</SelectItem>
+                <SelectItem value="verified" className="text-black hover:bg-gray-100">Verified</SelectItem>
+                <SelectItem value="active" className="text-black hover:bg-gray-100">Active</SelectItem>
+                <SelectItem value="pending" className="text-black hover:bg-gray-100">Pending</SelectItem>
               </SelectContent>
             </Select>
 
@@ -366,7 +366,7 @@ export default function ClientsPage() {
                 onChange={(e) => setShowInactive(e.target.checked)}
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <label htmlFor="showInactive" className="text-sm text-gray-700">
+              <label htmlFor="showInactive" className="text-sm text-foreground">
                 Show Inactive
               </label>
             </div>
@@ -381,7 +381,7 @@ export default function ClientsPage() {
           const gcsgDisplay = getGCSGDisplay(client)
           
           return (
-            <Card key={client.id} className="hover:shadow-md transition-shadow">
+            <Card key={client.id} className="hover:shadow-md transition-shadow border-border">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -389,8 +389,8 @@ export default function ClientsPage() {
                       <Building className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold">{client.business_name || "Unnamed Business"}</h3>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                      <h3 className="text-lg font-semibold text-foreground">{client.business_name || "Unnamed Business"}</h3>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         {client.contact_name && (
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3" />
@@ -410,7 +410,7 @@ export default function ClientsPage() {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         {client.business_address && (
                           <div className="flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
@@ -438,10 +438,10 @@ export default function ClientsPage() {
                       >
                         {gcsgDisplay.score}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         GCSG Score
                         {client.place_id && gcsgScores.get(client.place_id)?.cached && (
-                          <span className="text-blue-500 ml-1" title="Cached result">📋</span>
+                          <span className="text-primary ml-1" title="Cached result">📋</span>
                         )}
                       </div>
                     </div>
@@ -471,10 +471,10 @@ export default function ClientsPage() {
                           </div>
                         </div>
                       )}
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         Reviews
                         {loadingReviews && (
-                          <span className="text-blue-500 ml-1" title="Loading...">⏳</span>
+                          <span className="text-primary ml-1" title="Loading...">⏳</span>
                         )}
                       </div>
                     </div>
@@ -484,15 +484,15 @@ export default function ClientsPage() {
   {/* Verification Status */}
   <div className="relative group">
     {client.claim_status === "verified" ? (
-      <Shield className="h-5 w-5 text-green-500 cursor-pointer fill-current" />
+      <Shield className="h-5 w-5 text-green-500 dark:text-green-400 cursor-pointer fill-current" />
     ) : client.claim_status === "pending" ? (
-      <Shield className="h-5 w-5 text-orange-400 cursor-pointer fill-current" />
+      <Shield className="h-5 w-5 text-orange-400 dark:text-orange-300 cursor-pointer fill-current" />
     ) : client.claim_status === "claimed" ? (
-      <Shield className="h-5 w-5 text-purple-300 cursor-pointer fill-current" />
+      <Shield className="h-5 w-5 text-purple-300 dark:text-purple-400 cursor-pointer fill-current" />
     ) : client.claim_status === "rejected" ? (
-      <Shield className="h-5 w-5 text-red-500 cursor-pointer fill-current" />
+      <Shield className="h-5 w-5 text-red-500 dark:text-red-400 cursor-pointer fill-current" />
     ) : (
-      <Shield className="h-5 w-5 text-gray-300 cursor-pointer fill-current" />
+      <Shield className="h-5 w-5 text-muted-foreground cursor-pointer fill-current" />
     )}
     {/* Tooltip */}
     <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10 pointer-events-none">
@@ -507,9 +507,9 @@ export default function ClientsPage() {
   {/* Activity Status */}
   <div className="relative group">
     {client.isactive ? (
-      <CheckCircle className="h-5 w-5 text-green-500 cursor-pointer" />
+      <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400 cursor-pointer" />
     ) : (
-      <XCircle className="h-5 w-5 text-red-500 cursor-pointer" />
+      <XCircle className="h-5 w-5 text-red-500 dark:text-red-400 cursor-pointer" />
     )}
     {/* Tooltip */}
     <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10 pointer-events-none">
@@ -520,8 +520,8 @@ export default function ClientsPage() {
 
                     {/* Sales Rep */}
                     <div className="text-right">
-                      <div className="text-sm font-medium">{client.sales_rep_name || "Unassigned"}</div>
-                      <div className="text-xs text-gray-500">Sales Representative</div>
+                      <div className="text-sm font-medium text-foreground">{client.sales_rep_name || "Unassigned"}</div>
+                      <div className="text-xs text-muted-foreground">Sales Representative</div>
                     </div>
 
                     {/* Actions */}
@@ -554,10 +554,10 @@ export default function ClientsPage() {
                 </div>
 
                 {/* Business Type and Additional Info */}
-                <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+                <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
                   <span>Industry: {client.industry_category_name || "Not specified"}</span>
                   {client.business_description && <span>• {client.business_description.substring(0, 100)}...</span>}
-                  {!client.isactive && <span className="text-red-600">• INACTIVE</span>}
+                  {!client.isactive && <span className="text-red-600 dark:text-red-400">• INACTIVE</span>}
                 </div>
               </CardContent>
             </Card>
@@ -594,13 +594,13 @@ export default function ClientsPage() {
 
       {/* Quick Stats */}
       <div className="grid gap-6 md:grid-cols-4">
-        <Card>
+        <Card className="border-border">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-600" />
+              <Users className="h-5 w-5 text-primary" />
               <div>
-                <div className="text-2xl font-bold">{filteredClients.length}</div>
-                <div className="text-sm text-gray-600">
+                <div className="text-2xl font-bold text-foreground">{filteredClients.length}</div>
+                <div className="text-sm text-muted-foreground">
                   {showInactive ? "Total Clients" : "Active Clients"}
                 </div>
               </div>
@@ -608,40 +608,40 @@ export default function ClientsPage() {
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="border-border">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-green-600" />
+              <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
               <div>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-foreground">
                   {filteredClients.filter((c) => c.claim_status === "verified").length}
                 </div>
-                <div className="text-sm text-gray-600">Verified</div>
+                <div className="text-sm text-muted-foreground">Verified</div>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="border-border">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-blue-600" />
+              <MessageSquare className="h-5 w-5 text-primary" />
               <div>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-foreground">
                   {Object.values(reviewCounts).reduce((sum, counts) => sum + counts.total_reviews, 0)}
                 </div>
-                <div className="text-sm text-gray-600">Total Reviews</div>
+                <div className="text-sm text-muted-foreground">Total Reviews</div>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card>
+        <Card className="border-border">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
               <div>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-foreground">
                   {clients.length > 0
                     ? Math.round(clients.reduce((sum, c) => {
                         const gcsgData = gcsgScores.get(c.place_id)
@@ -649,7 +649,7 @@ export default function ClientsPage() {
                       }, 0) / clients.filter(c => gcsgScores.get(c.place_id)?.score).length) || 0
                     : 0}
                 </div>
-                <div className="text-sm text-gray-600">Avg GCSG</div>
+                <div className="text-sm text-muted-foreground">Avg GCSG</div>
               </div>
             </div>
           </CardContent>

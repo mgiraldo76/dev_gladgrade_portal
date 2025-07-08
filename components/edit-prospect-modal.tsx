@@ -1,4 +1,4 @@
-// components/edit-prospect-modal.tsx - Enhanced with assignment dropdown AND activity log
+// File: /components/edit-prospect-modal.tsx - Enhanced with assignment dropdown AND activity log
 
 "use client"
 
@@ -338,7 +338,7 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
     }
   }
 
-  // ✅ RESTORED: Load activities function
+  // Load activities function
   const loadActivities = async () => {
     if (!prospect?.id) return
 
@@ -361,7 +361,7 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
     }
   }
 
-  // ✅ RESTORED: Add activity function
+  // Add activity function
   const handleAddActivity = async () => {
     if (!newActivity.subject.trim()) {
       alert("Please enter a subject for the activity")
@@ -488,14 +488,14 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto bg-background text-foreground border-border">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
+          <DialogTitle className="flex items-center gap-3 text-foreground">
             <Building className="h-5 w-5" />
             {prospect.business_name}
-            <Badge className="bg-blue-100 text-blue-800">{prospect.status}</Badge>
+            <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-950/20 dark:text-blue-300">{prospect.status}</Badge>
           </DialogTitle>
-          <DialogDescription>Edit prospect information and manage sales activities</DialogDescription>
+          <DialogDescription className="text-muted-foreground">Edit prospect information and manage sales activities</DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="details" className="w-full">
@@ -508,53 +508,57 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="business_name">Business Name *</Label>
+                  <Label htmlFor="business_name" className="text-foreground">Business Name *</Label>
                   <Input
                     id="business_name"
                     value={formData.business_name}
                     onChange={(e) => handleInputChange("business_name", e.target.value)}
                     required
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="contact_name">Contact Name</Label>
+                  <Label htmlFor="contact_name" className="text-foreground">Contact Name</Label>
                   <Input
                     id="contact_name"
                     value={formData.contact_name}
                     onChange={(e) => handleInputChange("contact_name", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="contact_email">Contact Email</Label>
+                  <Label htmlFor="contact_email" className="text-foreground">Contact Email</Label>
                   <Input
                     id="contact_email"
                     type="email"
                     value={formData.contact_email}
                     onChange={(e) => handleInputChange("contact_email", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
+                  <Label htmlFor="phone" className="text-foreground">Phone</Label>
                   <Input
                     id="phone"
                     value={formData.phone}
                     onChange={(e) => handleInputChange("phone", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
               </div>
 
               {/* Assignment Dropdown */}
-              <div className="space-y-4 border-t pt-4">
-                <h3 className="font-medium flex items-center gap-2">
+              <div className="space-y-4 border-t border-border pt-4">
+                <h3 className="font-medium flex items-center gap-2 text-foreground">
                   <Users className="h-4 w-4" />
                   Assignment & Ownership
                 </h3>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="assigned_salesperson_id">
+                  <Label htmlFor="assigned_salesperson_id" className="text-foreground">
                     Assigned Sales Representative *
                     {!canReassignProspects && (
                       <Badge variant="outline" className="ml-2 text-xs">
@@ -568,15 +572,15 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                     onValueChange={handleAssignmentChange}
                     disabled={!canReassignProspects || loadingSalesEmployees}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground border-border">
                       <SelectValue placeholder={loadingSalesEmployees ? "Loading employees..." : "Select sales representative"} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-white border-gray-300">
                       {salesEmployees.map((employee) => {
                         const isCurrentOwner = employee.id === prospect.assigned_salesperson_id
                         
                         return (
-                          <SelectItem key={employee.id} value={employee.id.toString()}>
+                          <SelectItem key={employee.id} value={employee.id.toString()} className="text-black hover:bg-gray-100">
                             <div className="flex items-center gap-2 w-full">
                               {getEmployeeIcon(employee, prospect.assigned_salesperson_id)}
                               <div className="flex-1">
@@ -599,7 +603,7 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                   </Select>
                   
                   {!canReassignProspects && (
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-muted-foreground">
                       <AlertTriangle className="h-3 w-3 inline mr-1" />
                       Only Sales Managers and Super Admins can reassign prospects to other team members.
                     </p>
@@ -608,16 +612,17 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
 
                 {/* Change Reason Input (shown when ownership is changing) */}
                 {showChangeReason && (
-                  <div className="space-y-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <Label htmlFor="change_reason">Reason for Assignment Change</Label>
+                  <div className="space-y-2 p-4 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <Label htmlFor="change_reason" className="text-foreground">Reason for Assignment Change</Label>
                     <Textarea
                       id="change_reason"
                       value={changeReason}
                       onChange={(e) => setChangeReason(e.target.value)}
                       placeholder="Please provide a reason for changing the prospect assignment..."
                       rows={2}
+                      className="bg-background text-foreground border-border"
                     />
-                    <p className="text-xs text-yellow-700">
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300">
                       This change will be logged in the audit system for compliance tracking.
                     </p>
                   </div>
@@ -625,41 +630,43 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
               </div>
 
               {/* Address Components */}
-              <div className="space-y-4 border-t pt-4">
-                <h3 className="font-medium">Address Information</h3>
+              <div className="space-y-4 border-t border-border pt-4">
+                <h3 className="font-medium text-foreground">Address Information</h3>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="street_address">Street Address</Label>
+                  <Label htmlFor="street_address" className="text-foreground">Street Address</Label>
                   <Input
                     id="street_address"
                     value={formData.street_address}
                     onChange={(e) => handleInputChange("street_address", e.target.value)}
                     placeholder="123 Main Street"
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
+                    <Label htmlFor="city" className="text-foreground">City</Label>
                     <Input
                       id="city"
                       value={formData.city}
                       onChange={(e) => handleInputChange("city", e.target.value)}
                       placeholder="Miami"
+                      className="bg-background text-foreground border-border"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
+                    <Label htmlFor="state" className="text-foreground">State</Label>
                     <Select
                       value={formData.state}
                       onValueChange={(value) => handleInputChange("state", value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-background text-foreground border-border">
                         <SelectValue placeholder="Select state" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white border-gray-300">
                         {US_STATES.map((state) => (
-                          <SelectItem key={state.value} value={state.value}>
+                          <SelectItem key={state.value} value={state.value} className="text-black hover:bg-gray-100">
                             {state.label}
                           </SelectItem>
                         ))}
@@ -667,31 +674,32 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="zip_code">ZIP Code</Label>
+                    <Label htmlFor="zip_code" className="text-foreground">ZIP Code</Label>
                     <Input
                       id="zip_code"
                       value={formData.zip_code}
                       onChange={(e) => handleZipChange(e.target.value)}
                       placeholder="33101 or 33101-1234"
+                      className="bg-background text-foreground border-border"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="country">Country</Label>
+                  <Label htmlFor="country" className="text-foreground">Country</Label>
                   <Select
                     value={formData.country}
                     onValueChange={(value) => handleInputChange("country", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground border-border">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="US">United States</SelectItem>
-                      <SelectItem value="CA">Canada</SelectItem>
-                      <SelectItem value="MX">Mexico</SelectItem>
-                      <SelectItem value="ES">Spain</SelectItem>
-                      <SelectItem value="IT">Italy</SelectItem>
+                    <SelectContent className="bg-white border-gray-300">
+                      <SelectItem value="US" className="text-black hover:bg-gray-100">United States</SelectItem>
+                      <SelectItem value="CA" className="text-black hover:bg-gray-100">Canada</SelectItem>
+                      <SelectItem value="MX" className="text-black hover:bg-gray-100">Mexico</SelectItem>
+                      <SelectItem value="ES" className="text-black hover:bg-gray-100">Spain</SelectItem>
+                      <SelectItem value="IT" className="text-black hover:bg-gray-100">Italy</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -699,25 +707,26 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="website">Website</Label>
+                  <Label htmlFor="website" className="text-foreground">Website</Label>
                   <Input
                     id="website"
                     value={formData.website}
                     onChange={(e) => handleInputChange("website", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="business_type">Industry</Label>
+                  <Label htmlFor="business_type" className="text-foreground">Industry</Label>
                   <Select
                     value={formData.business_type}
                     onValueChange={(value) => handleInputChange("business_type", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground border-border">
                       <SelectValue placeholder="Select industry" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-white border-gray-300">
                       {businessSectors.map((sector: any) => (
-                        <SelectItem key={sector.id} value={sector.businesssectorname}>
+                        <SelectItem key={sector.id} value={sector.businesssectorname} className="text-black hover:bg-gray-100">
                           {sector.businesssectorname}
                         </SelectItem>
                       ))}
@@ -728,55 +737,57 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="estimated_value">Estimated Value ($)</Label>
+                  <Label htmlFor="estimated_value" className="text-foreground">Estimated Value ($)</Label>
                   <Input
                     id="estimated_value"
                     type="number"
                     step="0.01"
                     value={formData.estimated_value}
                     onChange={(e) => handleInputChange("estimated_value", e.target.value)}
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
+                  <Label htmlFor="priority" className="text-foreground">Priority</Label>
                   <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground border-border">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectContent className="bg-white border-gray-300">
+                      <SelectItem value="low" className="text-black hover:bg-gray-100">Low</SelectItem>
+                      <SelectItem value="medium" className="text-black hover:bg-gray-100">Medium</SelectItem>
+                      <SelectItem value="high" className="text-black hover:bg-gray-100">High</SelectItem>
+                      <SelectItem value="urgent" className="text-black hover:bg-gray-100">Urgent</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status" className="text-foreground">Status</Label>
                   <Select value={formData.status} onValueChange={(value) => handleInputChange("status", value)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground border-border">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">New</SelectItem>
-                      <SelectItem value="contacted">Contacted</SelectItem>
-                      <SelectItem value="qualified">Qualified</SelectItem>
-                      <SelectItem value="proposal">Proposal</SelectItem>
-                      <SelectItem value="negotiation">Negotiation</SelectItem>
-                      <SelectItem value="converted">Converted</SelectItem>
-                      <SelectItem value="lost">Lost</SelectItem>
+                    <SelectContent className="bg-white border-gray-300">
+                      <SelectItem value="new" className="text-black hover:bg-gray-100">New</SelectItem>
+                      <SelectItem value="contacted" className="text-black hover:bg-gray-100">Contacted</SelectItem>
+                      <SelectItem value="qualified" className="text-black hover:bg-gray-100">Qualified</SelectItem>
+                      <SelectItem value="proposal" className="text-black hover:bg-gray-100">Proposal</SelectItem>
+                      <SelectItem value="negotiation" className="text-black hover:bg-gray-100">Negotiation</SelectItem>
+                      <SelectItem value="converted" className="text-black hover:bg-gray-100">Converted</SelectItem>
+                      <SelectItem value="lost" className="text-black hover:bg-gray-100">Lost</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes" className="text-foreground">Notes</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
                   onChange={(e) => handleInputChange("notes", e.target.value)}
                   rows={3}
+                  className="bg-background text-foreground border-border"
                 />
               </div>
 
@@ -791,12 +802,12 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
             </form>
           </TabsContent>
 
-          {/* ✅ RESTORED: Activities Tab with Full Functionality */}
+          {/* Activities Tab with Full Functionality */}
           <TabsContent value="activities" className="space-y-4">
             {/* Add New Activity */}
-            <Card>
+            <Card className="border-border">
               <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-foreground">
                   <Calendar className="h-4 w-4" />
                   Add New Activity
                 </CardTitle>
@@ -804,40 +815,40 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="activity_type">Activity Type</Label>
+                    <Label htmlFor="activity_type" className="text-foreground">Activity Type</Label>
                     <Select
                       value={newActivity.activity_type}
                       onValueChange={(value) => setNewActivity((prev) => ({ ...prev, activity_type: value }))}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-background text-foreground border-border">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="call">
+                      <SelectContent className="bg-white border-gray-300">
+                        <SelectItem value="call" className="text-black hover:bg-gray-100">
                           <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4 text-green-500" />
                             Phone Call
                           </div>
                         </SelectItem>
-                        <SelectItem value="email">
+                        <SelectItem value="email" className="text-black hover:bg-gray-100">
                           <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4 text-blue-500" />
                             Email
                           </div>
                         </SelectItem>
-                        <SelectItem value="meeting">
+                        <SelectItem value="meeting" className="text-black hover:bg-gray-100">
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-purple-500" />
                             Meeting
                           </div>
                         </SelectItem>
-                        <SelectItem value="note">
+                        <SelectItem value="note" className="text-black hover:bg-gray-100">
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-gray-500" />
                             Note
                           </div>
                         </SelectItem>
-                        <SelectItem value="follow_up">
+                        <SelectItem value="follow_up" className="text-black hover:bg-gray-100">
                           <div className="flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 text-yellow-500" />
                             Follow Up
@@ -847,24 +858,26 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="subject">Subject *</Label>
+                    <Label htmlFor="subject" className="text-foreground">Subject *</Label>
                     <Input
                       id="subject"
                       value={newActivity.subject}
                       onChange={(e) => setNewActivity((prev) => ({ ...prev, subject: e.target.value }))}
                       placeholder="Brief description of activity"
                       required
+                      className="bg-background text-foreground border-border"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description" className="text-foreground">Description</Label>
                   <Textarea
                     id="description"
                     value={newActivity.description}
                     onChange={(e) => setNewActivity((prev) => ({ ...prev, description: e.target.value }))}
                     rows={3}
                     placeholder="Detailed notes about the activity, outcome, next steps..."
+                    className="bg-background text-foreground border-border"
                   />
                 </div>
                 <Button 
@@ -879,9 +892,9 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
             </Card>
 
             {/* Activities List */}
-            <Card>
+            <Card className="border-border">
               <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-foreground">
                   <Building className="h-4 w-4" />
                   Activity History ({activities.length})
                 </CardTitle>
@@ -890,24 +903,24 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                 {loadingActivities ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                    <p className="text-gray-600 mt-2">Loading activities...</p>
+                    <p className="text-muted-foreground mt-2">Loading activities...</p>
                   </div>
                 ) : activities.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-muted-foreground">
                     <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="font-medium">No activities recorded yet</p>
+                    <p className="font-medium text-foreground">No activities recorded yet</p>
                     <p className="text-sm">Start by adding an activity above to track your sales interactions.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {activities.map((activity: any) => (
-                      <div key={activity.id} className="border-l-4 border-blue-200 pl-4 py-3 bg-gray-50 rounded-r-lg">
+                      <div key={activity.id} className="border-l-4 border-blue-200 pl-4 py-3 bg-muted/30 rounded-r-lg">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-2">
                             {getActivityIcon(activity.activity_type)}
                             <div>
-                              <div className="font-medium text-sm">{activity.subject}</div>
-                              <div className="text-xs text-gray-500 flex items-center gap-2">
+                              <div className="font-medium text-sm text-foreground">{activity.subject}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-2">
                                 <User className="h-3 w-3" />
                                 {activity.employee_name} 
                                 <span>•</span>
@@ -921,17 +934,17 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                           </Badge>
                         </div>
                         {activity.description && (
-                          <div className="text-sm text-gray-700 mt-2 pl-6">
+                          <div className="text-sm text-muted-foreground mt-2 pl-6">
                             {activity.description}
                           </div>
                         )}
                         {activity.outcome && (
-                          <div className="text-xs text-gray-500 mt-1 pl-6">
+                          <div className="text-xs text-muted-foreground mt-1 pl-6">
                             <strong>Outcome:</strong> {activity.outcome}
                           </div>
                         )}
                         {activity.next_action && (
-                          <div className="text-xs text-blue-600 mt-1 pl-6">
+                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 pl-6">
                             <strong>Next Action:</strong> {activity.next_action}
                           </div>
                         )}
