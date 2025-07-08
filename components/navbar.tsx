@@ -1,3 +1,4 @@
+// components/navbar.tsx
 "use client"
 
 import { useState } from "react"
@@ -35,7 +36,7 @@ export function Navbar() {
   }
 
   return (
-    <nav className="bg-white border-b border-gray-200 px-4 py-3 fixed w-full z-50 shadow-sm">
+    <nav className="bg-background border-b border-border px-4 py-3 fixed w-full z-50 shadow-sm">
       <div className="flex flex-wrap justify-between items-center">
         <div className="flex items-center">
           <Button
@@ -49,7 +50,7 @@ export function Navbar() {
           <Link href="/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <Logo size="sm" />
             <div className="flex flex-col">
-              <span className="text-xl font-bold text-dark">GladGrade</span>
+              <span className="text-xl font-bold text-foreground">GladGrade</span>
               <span className="text-xs text-primary font-semibold tracking-wide">PORTAL</span>
             </div>
           </Link>
@@ -71,7 +72,7 @@ export function Navbar() {
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{user?.email || "Demo User"}</p>
-                  <p className="text-xs text-gray-500 capitalize">{role || "client"} Account</p>
+                  <p className="text-xs text-muted-foreground capitalize">{role || "client"} Account</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -79,7 +80,7 @@ export function Navbar() {
               <DropdownMenuItem>Account Preferences</DropdownMenuItem>
               <DropdownMenuItem>Help & Support</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
+              <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
