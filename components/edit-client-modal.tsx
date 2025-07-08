@@ -983,7 +983,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                     value={formData.business_type || undefined}
                     onValueChange={(value) => handleInputChange("business_type", value || "")}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-background text-foreground border-border">
                       <SelectValue placeholder="Select industry" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1006,7 +1006,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                     value={formData.claim_status}
                     onValueChange={(value) => handleInputChange("claim_status", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger  className="bg-background text-foreground border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1025,7 +1025,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                     value={formData.security_level}
                     onValueChange={(value) => handleInputChange("security_level", value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger  className="bg-background text-foreground border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1042,7 +1042,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                     value={formData.sales_rep_id || undefined}
                     onValueChange={(value) => handleInputChange("sales_rep_id", value || "")}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger  className="bg-background text-foreground border-border">
                       <SelectValue placeholder="Select sales rep" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1301,7 +1301,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                           value={locationData.state}
                           onValueChange={(value) => handleLocationChange("state", value)}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger  className="bg-background text-foreground border-border">
                             <SelectValue placeholder="Select state" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1543,7 +1543,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                       value={newUser.user_role}
                       onValueChange={(value) => setNewUser({ ...newUser, user_role: value })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger  className="bg-background text-foreground border-border">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1608,7 +1608,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                         value={editUser.role}
                         onValueChange={(value) => setEditUser({ ...editUser, role: value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger  className="bg-background text-foreground border-border">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1625,7 +1625,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                         value={editUser.status}
                         onValueChange={(value) => setEditUser({ ...editUser, status: value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger  className="bg-background text-foreground border-border">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1692,7 +1692,7 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                       value={newActivity.activity_type}
                       onValueChange={(value) => setNewActivity((prev) => ({ ...prev, activity_type: value }))}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger  className="bg-background text-foreground border-border">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
