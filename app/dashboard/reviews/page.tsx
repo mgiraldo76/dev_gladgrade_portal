@@ -1,6 +1,6 @@
 // File: app/dashboard/reviews/page.tsx
 // Enhanced Reviews Dashboard with filtering, pagination, and role-based access
-// FIXED: Added client user filtering by businessId
+// FIXED: Added client user filtering by businessId + Applied Golden Theme
 
 "use client"
 
@@ -332,9 +332,9 @@ export default function ReviewsPage() {
   }
 
   const getRatingColor = (rating: number) => {
-    if (rating >= 9) return 'text-green-600'
-    if (rating >= 7) return 'text-yellow-600'
-    return 'text-red-600'
+    if (rating >= 9) return 'text-green-600 dark:text-green-400'
+    if (rating >= 7) return 'text-yellow-600 dark:text-yellow-400'
+    return 'text-red-600 dark:text-red-400'
   }
 
   const getRatingBadgeVariant = (rating: number) => {
@@ -359,7 +359,7 @@ export default function ReviewsPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your business locations...</p>
+          <p className="text-muted-foreground">Loading your business locations...</p>
         </div>
       </div>
     )
@@ -370,7 +370,7 @@ export default function ReviewsPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading reviews...</p>
+          <p className="text-muted-foreground">Loading reviews...</p>
         </div>
       </div>
     )
@@ -381,15 +381,15 @@ export default function ReviewsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-dark">Customer Reviews</h1>
+          <h1 className="text-3xl font-bold text-foreground">Customer Reviews</h1>
           <div className="flex items-center gap-2 mt-1">
-            <MessageSquare className="h-4 w-4 text-blue-600" />
-            <span className="text-sm text-blue-600">
+            <MessageSquare className="h-4 w-4 text-primary" />
+            <span className="text-sm text-foreground">
               {isClientUser ? 'Your Business Reviews' : 'Platform Review Management'}
             </span>
             {/* NEW: Show client business info */}
             {isClientUser && clientBusinessLocations.length > 0 && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-muted-foreground">
                 • {clientBusinessLocations.length} location{clientBusinessLocations.length > 1 ? 's' : ''}
               </span>
             )}
@@ -406,53 +406,53 @@ export default function ReviewsPage() {
       {/* Stats Cards */}
       {stats && (
         <div className="grid gap-6 md:grid-cols-5">
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-blue-600" />
+                <MessageSquare className="h-5 w-5 text-primary" />
                 <div>
-                  <div className="text-2xl font-bold">{stats.total_reviews}</div>
-                  <div className="text-sm text-gray-600">Total Reviews</div>
+                  <div className="text-2xl font-bold text-foreground">{stats.total_reviews}</div>
+                  <div className="text-sm text-muted-foreground">Total Reviews</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-500" />
                 <div>
-                  <div className="text-2xl font-bold">{stats.average_rating || 'N/A'}</div>
-                  <div className="text-sm text-gray-600">Avg Rating</div>
+                  <div className="text-2xl font-bold text-foreground">{stats.average_rating || 'N/A'}</div>
+                  <div className="text-sm text-muted-foreground">Avg Rating</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="text-center">
-                <div className="text-lg font-bold text-green-600">{stats.rating_breakdown.good}</div>
-                <div className="text-xs text-gray-600">Good (9-10)</div>
+                <div className="text-lg font-bold text-green-600 dark:text-green-400">{stats.rating_breakdown.good}</div>
+                <div className="text-xs text-muted-foreground">Good (9-10)</div>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="text-center">
-                <div className="text-lg font-bold text-yellow-600">{stats.rating_breakdown.mediocre}</div>
-                <div className="text-xs text-gray-600">Mediocre (7-8)</div>
+                <div className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{stats.rating_breakdown.mediocre}</div>
+                <div className="text-xs text-muted-foreground">Mediocre (7-8)</div>
               </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-border">
             <CardContent className="p-4">
               <div className="text-center">
-                <div className="text-lg font-bold text-red-600">{stats.rating_breakdown.poor}</div>
-                <div className="text-xs text-gray-600">Poor (0-6)</div>
+                <div className="text-lg font-bold text-red-600 dark:text-red-400">{stats.rating_breakdown.poor}</div>
+                <div className="text-xs text-muted-foreground">Poor (0-6)</div>
               </div>
             </CardContent>
           </Card>
@@ -460,9 +460,9 @@ export default function ReviewsPage() {
       )}
 
       {/* Filters */}
-      <Card>
+      <Card className="border-border">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-foreground">
             <Filter className="h-5 w-5" />
             Filters
           </CardTitle>
@@ -472,15 +472,15 @@ export default function ReviewsPage() {
             {/* Client Filter - Only for admin users, HIDDEN for client users */}
             {canViewAllReviews && (
               <div>
-                <label className="text-sm font-medium">Client</label>
+                <label className="text-sm font-medium text-foreground">Client</label>
                 <Select value={filters.clientId || "all"} onValueChange={(value) => handleFilterChange('clientId', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-background text-foreground border-border">
                     <SelectValue placeholder="All Clients" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Clients</SelectItem>
+                  <SelectContent className="bg-white border-gray-300">
+                    <SelectItem value="all" className="text-black hover:bg-gray-100">All Clients</SelectItem>
                     {clients.map(client => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
+                      <SelectItem key={client.id} value={client.id.toString()} className="text-black hover:bg-gray-100">
                         {client.business_name}
                       </SelectItem>
                     ))}
@@ -492,15 +492,15 @@ export default function ReviewsPage() {
             {/* NEW: Location Filter - Only for client users with multiple locations */}
             {isClientUser && clientBusinessLocations.length > 1 && (
               <div>
-                <label className="text-sm font-medium">Location</label>
+                <label className="text-sm font-medium text-foreground">Location</label>
                 <Select value={filters.placeId || "all"} onValueChange={(value) => handleFilterChange('placeId', value)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-background text-foreground border-border">
                     <SelectValue placeholder="All Locations" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Locations</SelectItem>
+                  <SelectContent className="bg-white border-gray-300">
+                    <SelectItem value="all" className="text-black hover:bg-gray-100">All Locations</SelectItem>
                     {clientBusinessLocations.map(location => (
-                      <SelectItem key={location.id} value={location.place_id}>
+                      <SelectItem key={location.id} value={location.place_id} className="text-black hover:bg-gray-100">
                         {location.location_name}
                         {location.is_primary && " (Primary)"}
                       </SelectItem>
@@ -512,71 +512,74 @@ export default function ReviewsPage() {
             
             {/* Date Range */}
             <div>
-              <label className="text-sm font-medium">From Date</label>
+              <label className="text-sm font-medium text-foreground">From Date</label>
               <Input
                 type="date"
                 value={filters.dateFrom}
                 onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                className="bg-background text-foreground border-border"
               />
             </div>
             
             <div>
-              <label className="text-sm font-medium">To Date</label>
+              <label className="text-sm font-medium text-foreground">To Date</label>
               <Input
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                className="bg-background text-foreground border-border"
               />
             </div>
             
             {/* Has Images Filter */}
             <div>
-              <label className="text-sm font-medium">Images</label>
+              <label className="text-sm font-medium text-foreground">Images</label>
               <Select value={filters.hasImages || "all"} onValueChange={(value) => handleFilterChange('hasImages', value)}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-background text-foreground border-border">
                   <SelectValue placeholder="All Reviews" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Reviews</SelectItem>
-                  <SelectItem value="true">With Images</SelectItem>
-                  <SelectItem value="false">Without Images</SelectItem>
+                <SelectContent className="bg-white border-gray-300">
+                  <SelectItem value="all" className="text-black hover:bg-gray-100">All Reviews</SelectItem>
+                  <SelectItem value="true" className="text-black hover:bg-gray-100">With Images</SelectItem>
+                  <SelectItem value="false" className="text-black hover:bg-gray-100">Without Images</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             {/* Rating Range Filter */}
             <div>
-              <label className="text-sm font-medium">Rating Range</label>
+              <label className="text-sm font-medium text-foreground">Rating Range</label>
               <Select value={filters.ratingRange || "all"} onValueChange={(value) => handleFilterChange('ratingRange', value)}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-background text-foreground border-border">
                   <SelectValue placeholder="All Ratings" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Ratings</SelectItem>
-                  <SelectItem value="0-6">Poor (0-6)</SelectItem>
-                  <SelectItem value="7-8">Mediocre (7-8)</SelectItem>
-                  <SelectItem value="9-10">Good (9-10)</SelectItem>
+                <SelectContent className="bg-white border-gray-300">
+                  <SelectItem value="all" className="text-black hover:bg-gray-100">All Ratings</SelectItem>
+                  <SelectItem value="0-6" className="text-black hover:bg-gray-100">Poor (0-6)</SelectItem>
+                  <SelectItem value="7-8" className="text-black hover:bg-gray-100">Mediocre (7-8)</SelectItem>
+                  <SelectItem value="9-10" className="text-black hover:bg-gray-100">Good (9-10)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             {/* Search Text */}
             <div>
-              <label className="text-sm font-medium">Search</label>
+              <label className="text-sm font-medium text-foreground">Search</label>
               <Input
                 placeholder="Search reviews..."
                 value={filters.searchText}
                 onChange={(e) => handleFilterChange('searchText', e.target.value)}
+                className="bg-background text-foreground border-border"
               />
             </div>
           </div>
           
           <div className="flex justify-between items-center">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted-foreground">
               Showing {reviews.length} of {totalCount} reviews
               {/* NEW: Show filtering info for client users */}
               {isClientUser && (
-                <span className="text-blue-600">
+                <span className="text-primary">
                   {" "}• Filtered for your business
                 </span>
               )}
@@ -589,20 +592,20 @@ export default function ReviewsPage() {
       </Card>
 
       {/* Reviews List */}
-      <Card>
+      <Card className="border-border">
         <CardHeader>
-          <CardTitle>Reviews ({totalCount})</CardTitle>
+          <CardTitle className="text-foreground">Reviews ({totalCount})</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading reviews...</p>
+              <p className="text-muted-foreground">Loading reviews...</p>
             </div>
           ) : reviews.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p className="font-medium">No reviews found</p>
+            <div className="text-center py-8 text-muted-foreground">
+              <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+              <p className="font-medium text-foreground">No reviews found</p>
               <p className="text-sm">
                 {isClientUser 
                   ? "No reviews found for your business locations" 
@@ -613,7 +616,7 @@ export default function ReviewsPage() {
           ) : (
             <div className="space-y-4">
               {reviews.map((review) => (
-                <div key={review.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                <div key={review.id} className="border border-border rounded-lg p-4 hover:shadow-md transition-shadow bg-background">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <Badge variant={getRatingBadgeVariant(review.ratingValue)}>
@@ -621,34 +624,34 @@ export default function ReviewsPage() {
                         {review.ratingValue}/10
                       </Badge>
                       <div>
-                        <div className="font-medium">{review.placeName}</div>
-                        <div className="text-sm text-gray-600">{review.placeAddress}</div>
+                        <div className="font-medium text-foreground">{review.placeName}</div>
+                        <div className="text-sm text-muted-foreground">{review.placeAddress}</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <User className="h-3 w-3" />
                         {review.author}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {formatDate(review.reviewCreatedDate)}
                       </div>
                     </div>
                   </div>
                   
                   <div className="mb-3">
-                    <p className="text-gray-700">{review.review}</p>
+                    <p className="text-foreground">{review.review}</p>
                   </div>
                   
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {review.subcategory && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs border-border">
                           {review.subcategory}
                         </Badge>
                       )}
                       {review.hasImages && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs border-border">
                           <Image className="h-3 w-3 mr-1" />
                           {review.imageCount || 1} image{(review.imageCount || 1) > 1 ? 's' : ''}
                         </Badge>
@@ -676,7 +679,7 @@ export default function ReviewsPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted-foreground">
             Page {currentPage} of {totalPages}
           </div>
           <div className="flex gap-2">
