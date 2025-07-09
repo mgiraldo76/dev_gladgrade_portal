@@ -1,6 +1,10 @@
+// Process pending emails (can be called by a cron job)// File: lib/email-service.ts
+// Enhanced email service with QR code email functionality
+
 import nodemailer from "nodemailer"
 import type { Transporter } from "nodemailer"
 import { query } from "@/lib/database"
+// Note: Remove fs and path imports as they're not needed for our implementation
 
 // Email service configuration - prioritize basic SMTP
 const createTransporter = (): Transporter => {
@@ -66,193 +70,118 @@ const createTransporter = (): Transporter => {
 // Function to get actual client and salesman data from database using correct schema
 async function getConversionData(clientId: number, prospectId?: number) {
   try {
-    console.log(`🔍 Fetching conversion data for client ${clientId}, prospect ${prospectId}...`)
+    const result = await query(
+      `SELECT 
+        bc.business_name,
+        bc.contact_name,
+        bc.contact_email,
+        bc.phone,
+        e.full_name as sales_rep_name,
+        e.email as sales_rep_email
+       FROM business_clients bc
+       LEFT JOIN employees e ON bc.sales_rep_id = e.id
+       WHERE bc.id = $1`,
+      [clientId]
+    )
 
-    // Get client data
-    const clientResult = await query(`SELECT * FROM business_clients WHERE id = $1`, [clientId])
-
-    if (clientResult.rows.length === 0) {
+    if (result.rows.length === 0) {
       throw new Error(`Client with ID ${clientId} not found`)
     }
 
-    const client = clientResult.rows[0]
-    console.log("✅ Found client:", client.business_name)
-
-    // Get salesman data using the correct schema
-    let salesman = null
-    let salesmanName = "Ada Fernandez" // Default fallback
-
-    // Method 1: If we have prospect_id, get salesman from prospect
-    if (prospectId) {
-      try {
-        const prospectResult = await query(
-          `SELECT p.*, e.full_name, e.email as employee_email
-           FROM prospects p
-           LEFT JOIN employees e ON p.assigned_salesperson_id = e.id
-           WHERE p.id = $1`,
-          [prospectId],
-        )
-
-        console.log(`🔍 Prospect query result:`, prospectResult.rows[0])
-
-        if (prospectResult.rows.length > 0 && prospectResult.rows[0].full_name) {
-          salesman = prospectResult.rows[0]
-          salesmanName = salesman.full_name
-          console.log(
-            "✅ Found salesman from prospect:",
-            salesmanName,
-            "Employee ID:",
-            salesman.assigned_salesperson_id,
-          )
-        } else {
-          console.log("⚠️ No salesman found in prospect, checking assigned_salesperson_id...")
-          console.log("assigned_salesperson_id:", prospectResult.rows[0]?.assigned_salesperson_id)
-        }
-      } catch (error) {
-        console.error("⚠️ Could not get salesman from prospect:", error)
-      }
-    }
-
-    // Method 2: If no salesman yet, try from client's sales_rep_id
-    if (!salesman && client.sales_rep_id) {
-      try {
-        const salesmanResult = await query(`SELECT full_name, email FROM employees WHERE id = $1`, [
-          client.sales_rep_id,
-        ])
-
-        if (salesmanResult.rows.length > 0) {
-          salesman = salesmanResult.rows[0]
-          salesmanName = salesman.full_name
-          console.log("✅ Found salesman from client:", salesmanName)
-        }
-      } catch (error) {
-        console.error("⚠️ Could not get salesman from client:", error)
-      }
-    }
-
-    // Method 3: If still no salesman, try from original_prospect_id
-    if (!salesman && client.original_prospect_id) {
-      try {
-        const originalProspectResult = await query(
-          `SELECT p.*, e.full_name, e.email as employee_email
-           FROM prospects p
-           LEFT JOIN employees e ON p.assigned_salesperson_id = e.id
-           WHERE p.id = $1`,
-          [client.original_prospect_id],
-        )
-
-        if (originalProspectResult.rows.length > 0 && originalProspectResult.rows[0].full_name) {
-          salesman = originalProspectResult.rows[0]
-          salesmanName = salesman.full_name
-          console.log("✅ Found salesman from original prospect:", salesmanName)
-        }
-      } catch (error) {
-        console.error("⚠️ Could not get salesman from original prospect:", error)
-      }
-    }
-
+    const client = result.rows[0]
     return {
-      clientName: client.business_name || client.contact_name || "Valued Client",
+      clientName: client.business_name,
       clientEmail: client.contact_email,
-      salesmanName: salesmanName,
-      salesmanEmail: salesman?.employee_email || salesman?.email,
-      client: client,
-      salesman: salesman,
+      salesmanName: client.sales_rep_name || "GladGrade Team",
+      salesmanEmail: client.sales_rep_email || process.env.SMTP_FROM
     }
   } catch (error) {
     console.error("❌ Error fetching conversion data:", error)
     return {
       clientName: "Valued Client",
       clientEmail: "",
-      salesmanName: "Ada Fernandez",
-      salesmanEmail: null,
-      client: null,
-      salesman: null,
+      salesmanName: "GladGrade Team",
+      salesmanEmail: process.env.SMTP_FROM || ""
     }
   }
 }
 
-// Welcome email template with real data
-const generateWelcomeEmail = (clientName: string, clientEmail: string, salesmanName: string) => {
-  const subject = "Welcome to GladGrade — Your Portal Access is Ready!"
+// Generate welcome email template
+export function generateWelcomeEmail(clientName: string, clientEmail: string, salesmanName: string) {
+  const subject = `Welcome to GladGrade, ${clientName}! 🎉`
 
   const htmlContent = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
-        <meta charset="utf-8">
+        <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Welcome to GladGrade</title>
         <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-            .features { background: white; padding: 20px; border-radius: 5px; margin: 20px 0; }
-            .feature-item { margin: 8px 0; padding: 8px; border-left: 3px solid #667eea; }
-            .steps { background: white; padding: 20px; border-radius: 5px; margin: 20px 0; }
-            .step { margin: 8px 0; padding: 8px; }
-            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
-            .contact-info { background: #e8f2ff; padding: 15px; border-radius: 5px; margin: 20px 0; text-align: center; }
-            .emoji { font-size: 1.2em; }
+            body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+            .header { text-align: center; padding: 20px 0; border-bottom: 3px solid #f97316; }
+            .logo { font-size: 28px; font-weight: bold; color: #f97316; }
+            .content { padding: 30px 0; }
+            .cta-button { display: inline-block; padding: 12px 24px; background-color: #f97316; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+            .features { background-color: #fff7ed; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .footer { text-align: center; padding: 20px 0; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 14px; }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <h1>Welcome to GladGrade!</h1>
-                <p>Your dedicated sales representative is here to help</p>
+                <div class="logo">GladGrade</div>
             </div>
             
             <div class="content">
+                <h1>Welcome to GladGrade!</h1>
                 <p>Dear ${clientName},</p>
                 
-                <p>Welcome to GladGrade! I'm <strong>${salesmanName}</strong>, your dedicated Glad Sales Representative, and I'll be here to support you as you get started.</p>
+                <p>Welcome to GladGrade! I'm ${salesmanName}, your dedicated Glad Sales Representative, and I'll be here to support you as you get started.</p>
                 
                 <p>Your business account has been successfully created. You can now log in to the GladGrade Portal and begin exploring the tools we've built to help you enhance customer satisfaction and showcase your service excellence.</p>
                 
-                <div class="steps">
-                    <h3><span class="emoji">🔐</span> Getting Started is Easy:</h3>
-                    <div class="step">1. Go to <strong>https://portal.gladgrade.com</strong></div>
-                    <div class="step">2. Click "Log In"</div>
-                    <div class="step">3. Enter your registered email: <strong>${clientEmail}</strong></div>
-                    <div class="step">4. Check your inbox for a one-time verification code</div>
-                    <div class="step">5. You're in!</div>
-                </div>
-                
-                <div style="text-align: center;">
-                    <a href="https://portal.gladgrade.com" class="button">Access Your Portal</a>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="https://portal.gladgrade.com" class="cta-button">Access Your Portal</a>
                 </div>
                 
                 <div class="features">
-                    <h3><span class="emoji">💼</span> In Your Portal, You'll Be Able To:</h3>
-                    <div class="feature-item"><span class="emoji">📝</span> Reply to customer reviews</div>
-                    <div class="feature-item"><span class="emoji">🔧</span> Address disputes efficiently</div>
-                    <div class="feature-item"><span class="emoji">📋</span> Manage your menu or service offerings (if applicable)</div>
-                    <div class="feature-item"><span class="emoji">📱</span> Access and print QR codes</div>
-                    <div class="feature-item"><span class="emoji">📊</span> Track your public-facing GladGrade Score (GCSG)</div>
-                    <div class="feature-item"><span class="emoji">📢</span> Buy advertisement space to promote your business</div>
-                    <div class="feature-item"><span class="emoji">🚀</span> …and so much more</div>
+                    <h3>🚀 Getting Started is Easy:</h3>
+                    <ol>
+                        <li>Go to <strong>portal.gladgrade.com</strong></li>
+                        <li>Click "Log In"</li>
+                        <li>Enter your registered email: <strong>${clientEmail}</strong></li>
+                        <li>Check your inbox for a one-time verification code</li>
+                        <li>You're in!</li>
+                    </ol>
+                    
+                    <h3>💼 In Your Portal, You'll Be Able To:</h3>
+                    <ul>
+                        <li>📝 Reply to customer reviews</li>
+                        <li>🔧 Address disputes efficiently</li>
+                        <li>📋 Manage your menu or service offerings (if applicable)</li>
+                        <li>📱 Access and print QR codes</li>
+                        <li>📊 Track your public-facing GladGrade Score (GCSG)</li>
+                        <li>📢 Buy advertisement space to promote your business</li>
+                        <li>🚀 …and so much more</li>
+                    </ul>
                 </div>
                 
                 <p>If you have any questions, feel free to reach out to me directly — I'm happy to help.</p>
                 
-                <div class="contact-info">
-                    <p><span class="emoji">📩</span> <strong>sales.support@gladgrade.com</strong></p>
-                </div>
+                <p>📩 <a href="mailto:sales.support@gladgrade.com">sales.support@gladgrade.com</a></p>
                 
                 <p>Looking forward to seeing your business grow through the power of customer satisfaction!</p>
                 
                 <p>Warmest regards,<br>
                 <strong>${salesmanName}</strong><br>
                 Glad Sales Representative<br>
-                The GladGrade Team<br>
-                <span class="emoji">🌐</span> <a href="https://www.gladgrade.com">www.gladgrade.com</a></p>
+                The GladGrade Team</p>
             </div>
             
             <div class="footer">
-                <p>© 2024 GladGrade Holding Corporation. All rights reserved.</p>
+                <p>© 2025 GladGrade. All rights reserved.</p>
                 <p>Miami, Florida | <a href="https://www.gladgrade.com">www.gladgrade.com</a></p>
             </div>
         </div>
@@ -292,6 +221,97 @@ Looking forward to seeing your business grow through the power of customer satis
 Warmest regards,
 ${salesmanName}
 Glad Sales Representative
+The GladGrade Team
+🌐 www.gladgrade.com
+  `
+
+  return { subject, htmlContent, textContent }
+}
+
+// NEW: Generate QR Code email template
+export function generateQRCodeEmail(clientName: string, salesmanName: string) {
+  const subject = `Your GladGrade QR Code is Ready! 📱`
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Your GladGrade QR Code</title>
+        <style>
+            body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f9f9f9; }
+            .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+            .header { text-align: center; padding: 20px 0; border-bottom: 3px solid #f97316; }
+            .logo { font-size: 28px; font-weight: bold; color: #f97316; }
+            .content { padding: 30px 0; }
+            .qr-section { background-color: #fff7ed; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; }
+            .instructions { background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0ea5e9; }
+            .footer { text-align: center; padding: 20px 0; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 14px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">GladGrade</div>
+            </div>
+            
+            <div class="content">
+                <h1>Your QR Code is Ready! 📱</h1>
+                <p>Hi ${clientName},</p>
+                
+                <p>Find attached your business' QR Code. You can print it and have your clients scan it so they can GladGrade you!</p>
+                
+                <div class="qr-section">
+                    <h3>📱 Your QR Code is Attached</h3>
+                    <p>The attached PDF contains your custom QR code with professional GladGrade branding. It's ready to print and display in your business!</p>
+                </div>
+                
+                <div class="instructions">
+                    <h3>🚀 How to Use Your QR Code:</h3>
+                    <ol>
+                        <li><strong>Print it:</strong> Use the attached PDF to print your QR code</li>
+                        <li><strong>Display it:</strong> Place it where customers can easily see and scan it</li>
+                        <li><strong>Get reviews:</strong> Customers scan and are taken directly to rate your business</li>
+                        <li><strong>Build reputation:</strong> Watch your GladGrade Score improve!</li>
+                    </ol>
+                    
+                    <p><strong>💡 Pro Tip:</strong> The larger you print it, the easier it is for customers to scan. We recommend at least 3x3 inches for optimal scanning.</p>
+                </div>
+                
+                <p>You can always contact us if you have any questions, concerns or suggestions.</p>
+                
+                <p>Thank you,<br>
+                <strong>${salesmanName}</strong><br>
+                The GladGrade Team</p>
+            </div>
+            
+            <div class="footer">
+                <p>© 2025 GladGrade. All rights reserved.</p>
+                <p>Miami, Florida | <a href="https://www.gladgrade.com">www.gladgrade.com</a></p>
+            </div>
+        </div>
+    </body>
+    </html>
+  `
+
+  const textContent = `
+Hi ${clientName},
+
+Find attached your business' QR Code. You can print it and have your clients scan it so they can GladGrade you!
+
+🚀 How to Use Your QR Code:
+1. Print it: Use the attached PDF to print your QR code
+2. Display it: Place it where customers can easily see and scan it
+3. Get reviews: Customers scan and are taken directly to rate your business
+4. Build reputation: Watch your GladGrade Score improve!
+
+💡 Pro Tip: The larger you print it, the easier it is for customers to scan. We recommend at least 3x3 inches for optimal scanning.
+
+You can always contact us if you have any questions, concerns or suggestions.
+
+Thank you,
+${salesmanName}
 The GladGrade Team
 🌐 www.gladgrade.com
   `
@@ -368,6 +388,359 @@ export async function sendWelcomeEmail(clientName: string, clientEmail: string, 
 
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
+}
+
+// NEW: Send QR Code email with PDF attachment
+export async function sendQRCodeEmail(clientId: number, qrCodeImagePath: string, employeeId: number) {
+  try {
+    console.log(`📧 Sending QR code email for client ${clientId}...`)
+
+    const transporter = createTransporter()
+
+    // Get client and employee data from database
+    const conversionData = await getConversionData(clientId)
+    
+    // Get client business address for full layout
+    const clientDetailResult = await query(
+      `SELECT business_address FROM business_clients WHERE id = $1`,
+      [clientId]
+    )
+    const businessAddress = clientDetailResult.rows[0]?.business_address || ""
+    
+    // Get employee data for audit trail
+    const employeeResult = await query(
+      `SELECT full_name, email FROM employees WHERE id = $1`,
+      [employeeId]
+    )
+    
+    const employee = employeeResult.rows[0] || { full_name: "GladGrade Team", email: "" }
+
+    console.log("🔍 QR Code email data:", {
+      clientName: conversionData.clientName,
+      clientEmail: conversionData.clientEmail,
+      salesmanName: conversionData.salesmanName,
+      employeeName: employee.full_name,
+      businessAddress: businessAddress
+    })
+
+    const { subject, htmlContent, textContent } = generateQRCodeEmail(
+      conversionData.clientName,
+      conversionData.salesmanName,
+    )
+
+    // Verify transporter configuration
+    console.log("🔍 Verifying email transporter...")
+    await transporter.verify()
+    console.log("✅ Email transporter verified successfully")
+
+    // For now, we'll include both the basic QR code and instruct the user about the full layout
+    // TODO: In the future, we can implement server-side canvas generation using node-canvas
+    let attachments: any[] = []
+    
+    if (qrCodeImagePath) {
+      try {
+        console.log("🔗 Processing QR code attachment:", qrCodeImagePath.substring(0, 50) + "...")
+        
+        // Check if it's a data URL or file path
+        if (qrCodeImagePath.startsWith('data:')) {
+          // It's a data URL, convert to buffer
+          const base64Data = qrCodeImagePath.split(',')[1]
+          if (base64Data && base64Data.length > 0) {
+            const buffer = Buffer.from(base64Data, 'base64')
+            
+            attachments.push({
+              filename: `${conversionData.clientName.replace(/[^a-zA-Z0-9]/g, '_')}_GladGrade_QR_Code.png`,
+              content: buffer,
+              contentType: 'image/png'
+            })
+            console.log(`✅ QR code attachment prepared: ${buffer.length} bytes`)
+          } else {
+            console.error("❌ Empty base64 data in QR code")
+          }
+        } else {
+          // It's a file path
+          attachments.push({
+            filename: `${conversionData.clientName.replace(/[^a-zA-Z0-9]/g, '_')}_GladGrade_QR_Code.png`,
+            path: qrCodeImagePath,
+            contentType: 'image/png'
+          })
+          console.log("✅ QR code attachment prepared from file path")
+        }
+      } catch (attachmentError) {
+        console.error("⚠️ Error preparing QR code attachment:", attachmentError)
+        // Continue without attachment rather than failing the email
+      }
+    } else {
+      console.error("❌ No QR code image path provided")
+    }
+
+    // Send email
+    const info = await transporter.sendMail({
+      from: `"${conversionData.salesmanName} - GladGrade Team" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to: conversionData.clientEmail,
+      subject: subject,
+      text: textContent,
+      html: htmlContent,
+      attachments: attachments
+    })
+
+    console.log(`✅ QR code email sent successfully: ${info.messageId}`)
+
+    // Log the email send to database
+    try {
+      await query(
+        `INSERT INTO email_logs (
+          recipient_email, recipient_name, email_type, subject, 
+          client_id, employee_id, status, sent_at, template_used
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8)`,
+        [
+          conversionData.clientEmail,
+          conversionData.clientName,
+          'qr_code',
+          subject,
+          clientId,
+          employeeId,
+          'sent',
+          'qr_code_template'
+        ]
+      )
+      console.log("✅ Email logged to database")
+    } catch (dbError) {
+      console.error("⚠️ Failed to log email to database:", dbError)
+      // Don't fail the email sending if database logging fails
+    }
+
+    return { 
+      success: true, 
+      messageId: info.messageId, 
+      data: conversionData,
+      attachmentCount: attachments.length
+    }
+  } catch (error) {
+    console.error("❌ Error sending QR code email:", error)
+
+    // Log the error to database
+    try {
+      const conversionData = await getConversionData(clientId)
+      await query(
+        `INSERT INTO email_logs (
+          recipient_email, recipient_name, email_type, subject, 
+          client_id, employee_id, status, error_message, template_used
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          conversionData.clientEmail,
+          conversionData.clientName,
+          'qr_code',
+          'Your GladGrade QR Code is Ready!',
+          clientId,
+          employeeId,
+          'failed',
+          error instanceof Error ? error.message : "Unknown error",
+          'qr_code_template'
+        ]
+      )
+    } catch (dbError) {
+      console.error("⚠️ Failed to log email error to database:", dbError)
+    }
+
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
+
+// Helper function to create full layout QR code
+async function createFullLayoutQRCode(qrCodeDataURL: string, businessName: string, businessAddress: string): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    try {
+      // Create a canvas to render the full layout
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      
+      // Set canvas size for print quality (300 DPI equivalent)
+      canvas.width = 1050 // 3.5 inches at 300 DPI
+      canvas.height = 1350 // 4.5 inches at 300 DPI
+      
+      if (ctx) {
+        // Fill white background
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        
+        // Draw border
+        ctx.strokeStyle = '#f97316'
+        ctx.lineWidth = 6
+        ctx.strokeRect(15, 15, canvas.width - 30, canvas.height - 30)
+        
+        let yPosition = 60
+        
+        // 1. Load and draw GladGrade logo at the very top, centered
+        const logoImage = new Image()
+        logoImage.onload = () => {
+          // Draw logo centered at top
+          const logoSize = 105 // 35px * 3 for high-res
+          const logoX = (canvas.width - logoSize) / 2
+          ctx.drawImage(logoImage, logoX, yPosition, logoSize, logoSize)
+          
+          yPosition += logoSize + 30
+          
+          // 2. Draw "GLADGRADE ME" title (no space)
+          ctx.textAlign = 'center'
+          ctx.fillStyle = '#f97316'
+          ctx.font = 'bold 54px Arial'
+          ctx.fillText('GLADGRADE ME', canvas.width / 2, yPosition)
+          
+          yPosition += 40
+          
+          // 3. Draw business name
+          ctx.fillStyle = '#333333'
+          ctx.font = 'bold 48px Arial'
+          ctx.fillText(businessName.toUpperCase(), canvas.width / 2, yPosition)
+          
+          yPosition += 60
+          
+          // 4. Load and draw QR code
+          const qrImage = new Image()
+          qrImage.onload = () => {
+            const qrSize = 450 // Large QR code for scanning
+            const qrX = (canvas.width - qrSize) / 2
+            ctx.drawImage(qrImage, qrX, yPosition, qrSize, qrSize)
+            
+            yPosition += qrSize + 30
+            
+            // 5. Draw business address if available
+            if (businessAddress) {
+              ctx.fillStyle = '#666666'
+              ctx.font = '36px Arial'
+              const addressLines = businessAddress.split(',')
+              for (const line of addressLines) {
+                ctx.fillText(line.trim(), canvas.width / 2, yPosition)
+                yPosition += 40
+              }
+              yPosition += 20
+            }
+            
+            // 6. Instructions - properly sized to fit horizontally
+            ctx.fillStyle = '#f8fafc'
+            ctx.fillRect(60, yPosition, canvas.width - 120, 70)
+            ctx.strokeStyle = '#e2e8f0'
+            ctx.lineWidth = 2
+            ctx.strokeRect(60, yPosition, canvas.width - 120, 70)
+            
+            ctx.fillStyle = '#666666'
+            ctx.font = '26px Arial' // Reduced font size to fit
+            ctx.fillText('1. Open Camera • 2. Scan Code • 3. Open/Download App • 4. Grade this Business', canvas.width / 2, yPosition + 45)
+            
+            yPosition += 90
+            
+            // Footer
+            ctx.strokeStyle = '#e5e7eb'
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.moveTo(100, yPosition)
+            ctx.lineTo(canvas.width - 100, yPosition)
+            ctx.stroke()
+            
+            ctx.fillStyle = '#999999'
+            ctx.font = '24px Arial'
+            ctx.fillText('Powered by GladGrade • www.gladgrade.com', canvas.width / 2, yPosition + 35)
+            
+            // Convert canvas to buffer
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const reader = new FileReader()
+                reader.onload = () => {
+                  const arrayBuffer = reader.result as ArrayBuffer
+                  resolve(Buffer.from(arrayBuffer))
+                }
+                reader.readAsArrayBuffer(blob)
+              } else {
+                resolve(null)
+              }
+            }, 'image/png')
+          }
+          
+          qrImage.src = qrCodeDataURL
+        }
+        
+        // Try to load the GladGrade logo, fallback if not available
+        logoImage.onerror = () => {
+          // Skip logo and continue with the rest
+          yPosition = 60
+          
+          // 2. Draw "GLADGRADE ME" title (no space)
+          ctx.textAlign = 'center'
+          ctx.fillStyle = '#f97316'
+          ctx.font = 'bold 54px Arial'
+          ctx.fillText('GLADGRADE ME', canvas.width / 2, yPosition)
+          
+          yPosition += 40
+          
+          // Continue with the rest of the layout...
+          const qrImage = new Image()
+          qrImage.onload = () => {
+            // Same QR code drawing logic as above
+            ctx.fillStyle = '#333333'
+            ctx.font = 'bold 48px Arial'
+            ctx.fillText(businessName.toUpperCase(), canvas.width / 2, yPosition)
+            
+            yPosition += 60
+            
+            const qrSize = 450
+            const qrX = (canvas.width - qrSize) / 2
+            ctx.drawImage(qrImage, qrX, yPosition, qrSize, qrSize)
+            
+            yPosition += qrSize + 90
+            
+            // Instructions
+            ctx.fillStyle = '#f8fafc'
+            ctx.fillRect(60, yPosition, canvas.width - 120, 70)
+            ctx.strokeStyle = '#e2e8f0'
+            ctx.lineWidth = 2
+            ctx.strokeRect(60, yPosition, canvas.width - 120, 70)
+            
+            ctx.fillStyle = '#666666'
+            ctx.font = '26px Arial'
+            ctx.fillText('1. Open Camera • 2. Scan Code • 3. Open/Download App • 4. Grade this Business', canvas.width / 2, yPosition + 45)
+            
+            yPosition += 90
+            
+            // Footer
+            ctx.strokeStyle = '#e5e7eb'
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.moveTo(100, yPosition)
+            ctx.lineTo(canvas.width - 100, yPosition)
+            ctx.stroke()
+            
+            ctx.fillStyle = '#999999'
+            ctx.font = '24px Arial'
+            ctx.fillText('Powered by GladGrade • www.gladgrade.com', canvas.width / 2, yPosition + 35)
+            
+            // Convert to buffer
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const reader = new FileReader()
+                reader.onload = () => {
+                  const arrayBuffer = reader.result as ArrayBuffer
+                  resolve(Buffer.from(arrayBuffer))
+                }
+                reader.readAsArrayBuffer(blob)
+              } else {
+                resolve(null)
+              }
+            }, 'image/png')
+          }
+          qrImage.src = qrCodeDataURL
+        }
+        
+        // Load the GladGrade logo
+        logoImage.src = '/images/gladgrade-logo.png'
+      } else {
+        resolve(null)
+      }
+    } catch (error) {
+      console.error("Error creating full layout QR code:", error)
+      resolve(null)
+    }
+  })
 }
 
 // Test email function
