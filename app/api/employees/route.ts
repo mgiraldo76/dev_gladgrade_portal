@@ -278,15 +278,50 @@ export async function PUT(request: NextRequest) {
     )
 
     // Update Firebase custom claims if Firebase UID exists and function available
+    
+    // Update Firebase custom claims if Firebase UID exists and function available
     if (currentEmployee.firebase_uid && setCustomClaims) {
       try {
-        await setCustomClaims(currentEmployee.firebase_uid, {
-          role: role,
-          employee_id: id,
-          department_id: department_id,
-          permissions: permissions || [],
-        })
-        console.log(`✅ Firebase custom claims updated for UID: ${currentEmployee.firebase_uid}`)
+        // SPECIAL HANDLING: If this is Miguel, set super_admin claims regardless of employee role
+        if (email.toLowerCase().trim() === 'miguel.giraldo@gladgrade.com') {
+          console.log('👑 Setting super_admin Firebase claims for Miguel...')
+          
+          await setCustomClaims(currentEmployee.firebase_uid, {
+            role: 'super_admin',  // Override to super_admin
+            employee_id: id,
+            department_id: department_id,
+            permissions: [
+              '*',  // Full access
+              'system_admin',
+              'user_management', 
+              'reports',
+              'settings',
+              'content_moderation',
+              'review_management',
+              'sales_pipeline',
+              'commission_management',
+              'financial_reports',
+              'client_management'
+            ],
+            isGladGradeEmployee: true,
+            canEditReviews: true,
+            canAccessAllClients: true,
+            isSuperAdmin: true,
+            setupDate: new Date().toISOString()
+          })
+          
+          console.log('✅ Super Admin Firebase claims set for Miguel')
+        } else {
+          // Regular employee custom claims
+          await setCustomClaims(currentEmployee.firebase_uid, {
+            role: role,
+            employee_id: id,
+            department_id: department_id,
+            permissions: permissions || [],
+          })
+          
+          console.log(`✅ Regular Firebase custom claims updated for employee: ${email}`)
+        }
       } catch (firebaseError) {
         console.error("⚠️ Failed to update Firebase custom claims:", firebaseError)
         // Continue with database update even if Firebase fails
