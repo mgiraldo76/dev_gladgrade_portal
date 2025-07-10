@@ -1,6 +1,6 @@
 // File: app/dashboard/reviews/page.tsx
 // Path: app/dashboard/reviews/page.tsx
-// FIXED: Reviews Dashboard filtering logic and client-side filtering
+// SECURITY FIXED: Removed client-side security logic, now relies on server-side validation
 
 "use client"
 
@@ -65,9 +65,9 @@ export default function ReviewsPage() {
   const searchParams = useSearchParams()
   
   // State management
-  const [allReviews, setAllReviews] = useState<Review[]>([]) // NEW: Store all reviews
-  const [filteredReviews, setFilteredReviews] = useState<Review[]>([]) // NEW: Store filtered reviews
-  const [displayedReviews, setDisplayedReviews] = useState<Review[]>([]) // NEW: Store paginated reviews
+  const [allReviews, setAllReviews] = useState<Review[]>([])
+  const [filteredReviews, setFilteredReviews] = useState<Review[]>([])
+  const [displayedReviews, setDisplayedReviews] = useState<Review[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [stats, setStats] = useState<ReviewStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -94,7 +94,7 @@ export default function ReviewsPage() {
     privacyFilter: searchParams?.get('privacyFilter') || 'all'
   })
   
-  // NEW: Review Details Modal state
+  // Review Details Modal state
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null)
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
   
@@ -121,12 +121,12 @@ export default function ReviewsPage() {
     loadReviews()
   }, [clientPlaceIds, isClientUser, canViewAllReviews])
 
-  // NEW: Apply filters whenever filters or allReviews change
+  // Apply filters whenever filters or allReviews change
   useEffect(() => {
     applyFilters()
   }, [filters, allReviews])
 
-  // NEW: Update pagination when filtered reviews change
+  // Update pagination when filtered reviews change
   useEffect(() => {
     updatePagination()
   }, [filteredReviews, currentPage])
@@ -144,7 +144,7 @@ export default function ReviewsPage() {
     }
   }, [filters.placeId, isClientUser, clientPlaceIds, clientBusinessLocations])
 
-  // NEW: Client-side filtering logic
+  // Client-side filtering logic
   const applyFilters = () => {
     let filtered = [...allReviews]
 
@@ -198,7 +198,7 @@ export default function ReviewsPage() {
     setCurrentPage(1) // Reset to first page when filters change
   }
 
-  // NEW: Update pagination and displayed reviews
+  // Update pagination and displayed reviews
   const updatePagination = () => {
     const totalPages = Math.ceil(filteredReviews.length / reviewsPerPage)
     setTotalPages(totalPages)
@@ -311,30 +311,15 @@ export default function ReviewsPage() {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      // FIXED: Build request body - load ALL reviews, then filter client-side
+      // SECURITY FIXED: Build request body - server will handle security validation
       const requestBody: any = {
-        includePrivate: isClientUser || canViewAllReviews,  // Include private reviews for authorized users
+        includePrivate: isClientUser || canViewAllReviews,
       }
 
-      // Client user filtering - restrict to their place IDs only
-      if (isClientUser && clientPlaceIds.length > 0) {
-        console.log('🔒 Applying client filtering for place IDs:', clientPlaceIds)
-        
-        if (!filters.placeId) {
-          const primaryLocation = clientBusinessLocations.find(loc => loc.is_primary)
-          const defaultPlaceId = primaryLocation?.place_id || clientPlaceIds[0]
-          requestBody.placeId = defaultPlaceId
-          console.log('🎯 Setting client place ID filter:', defaultPlaceId)
-        } else {
-          if (!clientPlaceIds.includes(filters.placeId)) {
-            console.warn('⚠️ Client trying to access place they don\'t own:', filters.placeId)
-            setAllReviews([])
-            setLoading(false)
-            return
-          }
-          requestBody.placeId = filters.placeId
-          console.log('🎯 Using client-selected place ID filter:', filters.placeId)
-        }
+      // For client users with location selection
+      if (isClientUser && filters.placeId) {
+        requestBody.placeId = filters.placeId
+        console.log('🎯 Client selected specific place ID:', filters.placeId)
       }
 
       // For admin users, apply place/client filters if set
@@ -362,23 +347,11 @@ export default function ReviewsPage() {
         
         const reviewsData = data.data || []
         const formattedReviews = reviewsData.map((review: any) => {
-          // Debug logging to see what we're getting
-          console.log('Raw review data:', {
-            id: review.id,
-            ratingvalue: review.ratingvalue,
-            ratingValue: review.ratingValue,
-            placename: review.placename,
-            placeName: review.placeName,
-            allFields: Object.keys(review)
-          })
-
           return {
             id: review.id?.toString() || '',
             ratingId: review.consumerratingid?.toString() || '',
-            // FIXED: Use the proper field from the joined consumerRatings table
             ratingValue: parseInt(review.ratingvalue, 10) || parseInt(review.ratingValue, 10) || 0,
             review: review.review || '',
-            // FIXED: Use the proper fields from consumerRatings
             placeName: review.placename || review.placeName || 'Unknown Location',
             placeId: review.placeid || review.placeId || '',
             placeAddress: review.placeaddress || review.placeAddress || '',
@@ -396,6 +369,10 @@ export default function ReviewsPage() {
         
       } else {
         console.error('Failed to load reviews:', response.status)
+        // Handle specific error cases
+        if (response.status === 403) {
+          console.error('❌ Access denied - user may be trying to access unauthorized data')
+        }
         setAllReviews([])
       }
     } catch (error) {
@@ -435,19 +412,19 @@ export default function ReviewsPage() {
     router.push('/dashboard/reviews')
   }
 
-  // NEW: Handle opening review details modal
+  // Handle opening review details modal
   const handleViewDetails = (reviewId: string) => {
     setSelectedReviewId(reviewId)
     setIsReviewModalOpen(true)
   }
 
-  // NEW: Handle closing review details modal
+  // Handle closing review details modal
   const handleCloseModal = () => {
     setIsReviewModalOpen(false)
     setSelectedReviewId(null)
   }
 
-  // NEW: Handle review updated (refresh data)
+  // Handle review updated (refresh data)
   const handleReviewUpdated = () => {
     loadReviews() // Reload all reviews to reflect changes
   }
