@@ -1,0 +1,198 @@
+API Architecture Guide
+
+Database Architecture
+Primary Databases
+GG Database (gg schema) - Main mobile application database
+Contains: users, reviews, ratings, surveys, images, etc.
+Used by: Mobile app endpoints, review system, user data
+Corp Database (corp schema) - Corporate/admin dashboard database
+Contains: business_clients, employees, audit_logs, permissions, etc.
+Used by: Admin dashboard, business management, audit logging
+Database Connection Configuration (db.js)
+javascript
+// Main GG database pool (default export)
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME, // GG database
+});
+
+// Corp database pool (additional)
+const corpPool = new Pool({
+  host: process.env.CORP_DB_HOST || process.env.DB_HOST,
+  database: process.env.CORP_DB_NAME || 'corp',
+});
+
+// Usage in routes:
+const pool = require('../config/db');           // GG database (default)
+const { corpDB } = require('../config/db');     // Corp database (explicit)
+API Path Structure
+Mobile App API Endpoints (GG Database)
+Server: Google Cloud Run - https://gladgrade-api-360532994710.us-east4.run.app/api
+
+Frontend Access Pattern:
+
+javascript
+// All mobile app data goes through gcloud-proxy
+fetch(`/api/gcloud-proxy/{endpoint}`, {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${firebaseToken}` },
+  body: JSON.stringify(params)
+})
+Key Endpoints:
+
+/api/gcloud-proxy/consumerReviews/query → GG database reviews
+/api/gcloud-proxy/consumerSurveyQuestionAnswers/query → GG database survey answers
+/api/gcloud-proxy/surveyQuestions/query → GG database survey questions
+/api/gcloud-proxy/reviews/images/{reviewId} → GG database images
+/api/gcloud-proxy/review/consumerReview/update → GG database review updates
+Admin Dashboard API Endpoints (Corp Database)
+Server: Local Next.js API routes - /api/*
+
+Frontend Access Pattern:
+
+javascript
+// Admin dashboard data uses local API routes
+fetch(`/api/{endpoint}`, {
+  method: 'POST', 
+  headers: { 'Authorization': `Bearer ${firebaseToken}` },
+  body: JSON.stringify(params)
+})
+Key Endpoints:
+
+/api/clients → Corp database business_clients
+/api/employees → Corp database employees
+/api/settings/* → Corp database settings
+/api/audit-logs → Corp database audit_logs
+gcloud-proxy Architecture
+Proxy Route Handler
+File: app/api/gcloud-proxy/[...path]/route.ts
+
+Function:
+
+Validates Firebase tokens
+Proxies requests to Google Cloud Run API
+Forwards authorization headers
+Handles CORS
+Target URL Pattern:
+
+Frontend: /api/gcloud-proxy/{path}
+Proxies to: https://gladgrade-api-360532994710.us-east4.run.app/api/{path}
+Authentication Flow
+Mobile App Users (GG Database)
+Firebase Authentication (mobile app)
+Token sent to gcloud-proxy endpoints
+Proxy validates token with Firebase Admin SDK
+Forwards request to Google Cloud Run API
+Google Cloud Run API validates token again
+Queries GG database using pool (default export)
+Admin Dashboard Users (Corp Database)
+Firebase Authentication (web dashboard)
+Token sent to local API routes
+Local API validates token with Firebase Admin SDK
+Queries Corp database using corpDB import
+Survey Data Architecture
+
+
+Database Tables (GG Schema)
+sql
+-- Survey questions with actual question text
+surveyquestions (
+  id,
+  question,           -- THE ACTUAL QUESTION TEXT
+  businesstypeid,
+  isactive
+)
+
+-- Survey question answers (links questions to ratings)  
+consumerSurveyQuestionAnswers (
+  id,
+  consumerRatingId,
+  surveyQuestionId,   -- FK to surveyquestions.id
+  answer,
+  userId
+)
+
+-- Consumer ratings (main rating record)
+consumerRatings (
+  id,
+  placeId,
+  ratingValue,
+  userId
+)
+
+Critical Survey Data Query Pattern
+sql
+-- CORRECT: Include question text via JOIN
+SELECT csqa.id, csqa.surveyQuestionId, csqa.answer,
+       sq.question  -- MUST INCLUDE THIS
+FROM consumerSurveyQuestionAnswers csqa 
+JOIN surveyquestions sq ON csqa.surveyQuestionId = sq.id
+WHERE csqa.consumerRatingId = ?
+
+
+Frontend Component Patterns
+Review Details Modal Pattern
+javascript
+
+
+// 1. Load review basic data
+const reviewResponse = await fetch('/api/gcloud-proxy/consumerReviews/query', {
+  body: JSON.stringify({ reviewIds: [reviewId], includePrivate: true })
+})
+
+// 2. Load survey answers WITH question text  
+const surveyResponse = await fetch('/api/gcloud-proxy/consumerSurveyQuestionAnswers/query', {
+  body: JSON.stringify({ consumerRatingIds: [consumerRatingId] })
+})
+
+// 3. Load images
+const imagesResponse = await fetch(`/api/gcloud-proxy/reviews/images/${reviewId}`)
+Common Issues & Solutions
+Issue: "Unknown Question" in Survey Data
+Cause: Survey API not joining with surveyquestions table Solution: Ensure Google Cloud Run API includes JOIN to get sq.question
+
+Issue: 403/401 Errors
+Cause: Token validation failing or wrong database access Solution: Check Firebase token claims and ensure correct API path
+
+Issue: Data Not Found
+Cause: Using wrong database (Corp vs GG) for endpoint Solution: Verify endpoint uses correct database connection
+
+Environment Variables Required
+env
+# GG Database (Mobile App)
+DB_HOST=
+DB_PORT=5432
+DB_NAME=gg_database
+DB_USER=
+DB_PASSWORD=
+
+# Corp Database (Admin Dashboard)  
+CORP_DB_HOST=
+CORP_DB_PORT=5432
+CORP_DB_NAME=corp
+CORP_DB_USER=
+CORP_DB_PASSWORD=
+
+# Firebase
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+
+
+
+
+Development vs Production
+
+Development
+Local API serves both mobile and dashboard endpoints
+Direct database connections to both GG and Corp
+All endpoints accessible via /api/*
+
+Production
+Mobile app endpoints: Google Cloud Run (gcloud-proxy/*)
+Dashboard endpoints: Vercel/local API routes (/api/*)
+Separate deployment and scaling for each component
+
+
+Key Takeaway: Always use /api/gcloud-proxy/* for mobile app data (GG database) and /api/* for admin dashboard data (Corp database).
+
