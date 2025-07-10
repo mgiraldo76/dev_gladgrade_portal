@@ -1,6 +1,6 @@
 // File: components/review-details-modal.tsx
 // Path: components/review-details-modal.tsx
-// FIXED: Survey Data loading with proper question text lookup
+// FIXED: Survey Data loading with proper question text lookup + Enhanced Images Tab
 
 "use client"
 
@@ -48,6 +48,12 @@ import {
   Heart,
   ThumbsUp,
   Reply,
+  ExternalLink,
+  X,
+  Shield,
+  Receipt,
+  Camera,
+  AlertTriangle
 } from "lucide-react"
 import { useAuth } from "@/app/providers"
 import { getAuth } from 'firebase/auth'
@@ -70,6 +76,16 @@ interface SurveyQuestion {
   questionText?: string
   businessTypeId?: number
   isActive?: boolean
+}
+
+// Enhanced image interface
+interface ReviewImage {
+  id: string
+  imageURL: string
+  orderByNumber: number
+  dateCreated: string
+  imageType?: string
+  imageTypeId?: number
 }
 
 interface ReviewDetails {
@@ -99,12 +115,7 @@ interface ReviewDetails {
   businessTypeId?: number
   
   // Images
-  images?: Array<{
-    id: string
-    imageURL: string
-    orderByNumber: number
-    dateCreated: string
-  }>
+  images?: Array<ReviewImage>
   
   // Survey answers
   surveyAnswers?: Array<{
@@ -131,6 +142,149 @@ interface ReviewDetailsModalProps {
   onReviewUpdated?: () => void
 }
 
+// Image display component with error handling
+function ImageThumbnail({ 
+  image, 
+  onClick, 
+  showModeration = false,
+  reviewId 
+}: { 
+  image: ReviewImage
+  onClick: () => void
+  showModeration?: boolean
+  reviewId: string
+}) {
+  const [imageError, setImageError] = useState(false)
+  const [imageLoading, setImageLoading] = useState(true)
+
+  const handleModerationClick = () => {
+    // Open Content Moderation in new window, filtering by this image
+    const moderationUrl = `/dashboard/moderation?type=image&search=${image.id}`
+    window.open(moderationUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  return (
+    <div className="relative group border rounded-lg overflow-hidden bg-muted/30">
+      {/* Image container */}
+      <div 
+        className="aspect-square cursor-pointer relative overflow-hidden"
+        onClick={onClick}
+      >
+        {!imageError ? (
+          <img
+            src={image.imageURL}
+            alt={`Review image ${image.orderByNumber || 'untitled'}`}
+            className={`w-full h-full object-cover transition-opacity duration-200 ${
+              imageLoading ? 'opacity-0' : 'opacity-100'
+            } hover:scale-105 transition-transform duration-200`}
+            onLoad={() => setImageLoading(false)}
+            onError={() => {
+              setImageError(true)
+              setImageLoading(false)
+            }}
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground bg-muted/50">
+            <AlertTriangle className="h-8 w-8 mb-2" />
+            <span className="text-xs text-center px-2">Error loading image</span>
+            <a 
+              href={image.imageURL} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:text-blue-800 mt-1 break-all px-2 text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View URL
+            </a>
+          </div>
+        )}
+
+        {/* Loading spinner */}
+        {imageLoading && !imageError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-muted/50">
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
+          </div>
+        )}
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-center justify-center">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <ImageIcon className="h-6 w-6 text-white" />
+          </div>
+        </div>
+      </div>
+
+      {/* Moderation link for staff */}
+      {showModeration && (
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-6 w-6 p-0 bg-white/90 hover:bg-white shadow-md"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleModerationClick()
+            }}
+            title="Open in Content Moderation"
+          >
+            <Shield className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Image lightbox modal
+function ImageLightbox({ 
+  image, 
+  isOpen, 
+  onClose 
+}: { 
+  image: ReviewImage | null
+  isOpen: boolean
+  onClose: () => void
+}) {
+  if (!image) return null
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] p-2">
+        <DialogHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-sm">
+              Review Image {image.orderByNumber ? `#${image.orderByNumber}` : ''}
+            </DialogTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="h-6 w-6 p-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogHeader>
+        
+        <div className="flex items-center justify-center max-h-[calc(90vh-100px)] overflow-hidden">
+          <img
+            src={image.imageURL}
+            alt={`Review image ${image.orderByNumber || 'untitled'}`}
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none'
+            }}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Ensure proper export
+export default ReviewDetailsModal
+
 export function ReviewDetailsModal({ 
   isOpen, 
   onClose, 
@@ -144,6 +298,8 @@ export function ReviewDetailsModal({
   const [replyMessage, setReplyMessage] = useState("")
   const [sendingReply, setSendingReply] = useState(false)
   const [tempPrivacyStatus, setTempPrivacyStatus] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<ReviewImage | null>(null)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   
   // Determine access level
   const isClientUser = role === 'client'
@@ -210,7 +366,7 @@ export function ReviewDetailsModal({
       // Load images for this review
       let images = []
       try {
-        const imagesResponse = await fetch(`/api/gcloud-proxy/reviews/images/${review.id}`, {
+        const imagesResponse = await fetch(`/api/gcloud-proxy/reviews/all-images/${review.id}`, {
           headers
         })
         if (imagesResponse.ok) {
@@ -411,6 +567,11 @@ export function ReviewDetailsModal({
     }
   }
 
+  const handleImageClick = (image: ReviewImage) => {
+    setSelectedImage(image)
+    setLightboxOpen(true)
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -434,6 +595,20 @@ export function ReviewDetailsModal({
   }
 
   if (!isOpen) return null
+
+  // Separate images by type for the Images tab
+  const reviewImages = reviewDetails?.images?.filter((img: ReviewImage) => 
+    img.imageTypeId === 1 || img.imageType === 'Review Photo'
+  ) || []
+  
+  const receiptImages = reviewDetails?.images?.filter((img: ReviewImage) => 
+    img.imageTypeId === 2 || img.imageType === 'Receipt'
+  ) || []
+
+  const hasReviewImages = reviewImages.length > 0
+  const hasReceiptImages = receiptImages.length > 0
+  const hasAnyImages = hasReviewImages || hasReceiptImages
+  const canViewReceipts = canModerate
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -610,39 +785,117 @@ export function ReviewDetailsModal({
               </Card>
             </TabsContent>
 
-            {/* Images Tab */}
-            <TabsContent value="images" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Review Images</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Photos uploaded by the customer with their review
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  {reviewDetails.images && reviewDetails.images.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {reviewDetails.images.map((image) => (
-                        <div key={image.id} className="border rounded-lg overflow-hidden">
-                          <img
-                            src={image.imageURL}
-                            alt={`Review image ${image.orderByNumber}`}
-                            className="w-full h-48 object-cover"
-                          />
-                          <div className="p-2 text-xs text-muted-foreground">
-                            {formatDate(image.dateCreated)}
+            {/* UPDATED: Enhanced Images Tab */}
+            <TabsContent value="images" className="space-y-6">
+              {hasAnyImages ? (
+                <>
+                  {/* Review Photos Section */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Camera className="h-5 w-5" />
+                        Review Images
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Photos uploaded by the customer with their review
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      {hasReviewImages ? (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {reviewImages.map((image) => (
+                            <ImageThumbnail
+                              key={image.id}
+                              image={image}
+                              onClick={() => handleImageClick(image)}
+                              showModeration={canModerate}
+                              reviewId={reviewDetails.id}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Camera className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>No review photos attached</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Receipt Images Section - Only for GladGrade staff */}
+                  {hasReceiptImages && (
+                    <Card>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Receipt className="h-5 w-5" />
+                            <CardTitle>Receipt Images</CardTitle>
+                            <Badge variant="outline" className="bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300">
+                              <Eye className="h-3 w-3 mr-1" />
+                              Staff Only
+                            </Badge>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <ImageIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No images attached to this review</p>
-                    </div>
+                        <p className="text-sm text-muted-foreground">
+                          Receipt images uploaded by the customer (internal use only)
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        {canViewReceipts ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {receiptImages.map((image) => (
+                              <ImageThumbnail
+                                key={image.id}
+                                image={image}
+                                onClick={() => handleImageClick(image)}
+                                showModeration={canModerate}
+                                reviewId={reviewDetails.id}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>You don't have clearance to view certain image types in this portal.</p>
+                            <p className="text-sm mt-2">Check with your system administrator.</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   )}
-                </CardContent>
-              </Card>
+
+                  {/* Moderation Link for Staff */}
+                  {canModerate && hasAnyImages && (
+                    <Card className="border-dashed">
+                      <CardContent className="pt-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Shield className="h-5 w-5 text-blue-600" />
+                            <div>
+                              <p className="font-medium">Content Moderation</p>
+                              <p className="text-sm text-muted-foreground">
+                                Review and moderate all images for this review
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const moderationUrl = `/dashboard/moderation?type=image&search=${reviewDetails.id}`
+                              window.open(moderationUrl, '_blank', 'noopener,noreferrer')
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Open Moderation
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              ) : null}
             </TabsContent>
 
             {/* Communication Tab */}
@@ -734,6 +987,16 @@ export function ReviewDetailsModal({
             Close
           </Button>
         </DialogFooter>
+
+        {/* Image Lightbox */}
+        <ImageLightbox
+          image={selectedImage}
+          isOpen={lightboxOpen}
+          onClose={() => {
+            setLightboxOpen(false)
+            setSelectedImage(null)
+          }}
+        />
       </DialogContent>
     </Dialog>
   )
