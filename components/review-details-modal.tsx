@@ -1,6 +1,6 @@
 // File: components/review-details-modal.tsx
 // Path: components/review-details-modal.tsx
-// FIXED: Privacy update with proper authentication handling
+// FIXED: Survey Data loading with proper question text lookup
 
 "use client"
 
@@ -51,6 +51,26 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/app/providers"
 import { getAuth } from 'firebase/auth'
+
+// Type definitions for API responses
+interface SurveyAnswer {
+  id: string | number
+  surveyQuestionId?: string | number
+  surveyquestionid?: string | number
+  answer: string
+  question?: string
+  userId?: string | number
+  dateCreated?: string
+}
+
+interface SurveyQuestion {
+  id: string | number
+  question?: string
+  questiontext?: string
+  questionText?: string
+  businessTypeId?: number
+  isActive?: boolean
+}
 
 interface ReviewDetails {
   // Basic review info
@@ -133,16 +153,17 @@ export function ReviewDetailsModal({
   // Load review details when modal opens
   useEffect(() => {
     if (isOpen && reviewId) {
-        console.log('🔄 Loading review details for ID:', reviewId)
-        console.log('📨 Modal props changed:', { isOpen, reviewId })
+      console.log('🔄 Loading review details for ID:', reviewId)
+      console.log('📨 Modal props changed:', { isOpen, reviewId })
       loadReviewDetails()
     }
   }, [isOpen, reviewId])
 
+  // FIXED: Enhanced loadReviewDetails function with proper survey data handling
   const loadReviewDetails = async () => {
     if (!reviewId) return
 
-        console.log('📥 loadReviewDetails called with reviewId:', reviewId) // Add this
+    console.log('📥 loadReviewDetails called with reviewId:', reviewId)
     setLoading(true)
     try {
       const headers: Record<string, string> = {
@@ -201,25 +222,32 @@ export function ReviewDetailsModal({
         console.warn('Could not load images:', error)
       }
 
-      // Load survey answers using the consumerRatingId from the review
+      // FIXED: Enhanced survey data loading with question text lookup
       let surveyAnswers = []
-      if (review.consumerratingid) {
-        try {
-          const surveyResponse = await fetch(`/api/gcloud-proxy/consumerSurveyQuestionAnswers/query`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              consumerRatingIds: [review.consumerratingid]
-            })
-          })
-          if (surveyResponse.ok) {
-            const surveyData = await surveyResponse.json()
-            surveyAnswers = surveyData.data || []
-            console.log('📊 Loaded survey answers:', surveyAnswers)
-          }
-        } catch (error) {
-          console.warn('Could not load survey answers:', error)
+      try {
+        console.log('📊 Loading survey answers for reviewId:', reviewId)
+        
+        const surveyResponse = await fetch(`/api/gcloud-proxy/reviews/survey-answers/${reviewId}`, {
+          method: 'GET',
+          headers
+        })
+        
+        if (surveyResponse.ok) {
+          const surveyData = await surveyResponse.json()
+          surveyAnswers = (surveyData.data || []).map((answer: SurveyAnswer) => ({
+            id: answer.id?.toString() || '',
+            question: answer.question || 'Question text not available',
+            answer: answer.answer || '',
+            surveyQuestionId: answer.surveyQuestionId?.toString() || ''
+          }))
+          
+          console.log(`✅ Loaded ${surveyAnswers.length} survey answers with questions`)
+          console.log('📊 Survey answers:', surveyAnswers)
+        } else {
+          console.warn('Failed to fetch survey answers:', surveyResponse.status)
         }
+      } catch (error) {
+        console.warn('Could not load survey answers:', error)
       }
 
       // Format review details with proper field mappings
@@ -243,16 +271,12 @@ export function ReviewDetailsModal({
         ratingId: review.consumerratingid?.toString() || '',
         
         images,
-        surveyAnswers: surveyAnswers.map((answer: any) => ({
-          id: answer.id?.toString() || '',
-          question: answer.question || 'Unknown Question',
-          answer: answer.answer || '',
-          surveyQuestionId: answer.surveyQuestionId?.toString() || ''
-        })),
+        surveyAnswers, // Now properly populated with question text
         replies: []
       }
 
       console.log('✅ Formatted review details:', details)
+      console.log('📊 Survey answers with questions:', details.surveyAnswers)
       setReviewDetails(details)
       setTempPrivacyStatus(details.isPrivate)
       
@@ -500,28 +524,25 @@ export function ReviewDetailsModal({
                       </div>
                     </div>
 
-                    {/* Privacy Control for Admins */}
+                    {/* Privacy Controls - Admin Only */}
                     {canEditPrivacy && (
-                      <div className="border rounded-lg p-4 bg-muted/30">
+                      <div className="border rounded-lg p-4">
                         <div className="flex items-center justify-between">
-                          <div>
+                          <div className="space-y-2">
                             <Label className="font-medium">Privacy Settings</Label>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Control whether this review is visible to public users
-                            </p>
-                            {/* DEBUGGING: Show current user info */}
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Current user: {user?.email} | Role: {role}
+                            <p className="text-sm text-muted-foreground">
+                              Control whether this review is visible to the public
                             </p>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-3">
                             <div className="flex items-center space-x-2">
                               <Switch
                                 id="privacy-toggle"
                                 checked={tempPrivacyStatus}
                                 onCheckedChange={setTempPrivacyStatus}
+                                disabled={saving}
                               />
-                              <Label htmlFor="privacy-toggle">
+                              <Label htmlFor="privacy-toggle" className="text-sm">
                                 {tempPrivacyStatus ? 'Private' : 'Public'}
                               </Label>
                             </div>
@@ -553,7 +574,7 @@ export function ReviewDetailsModal({
               </Card>
             </TabsContent>
 
-            {/* Survey Data Tab */}
+            {/* Survey Data Tab - FIXED */}
             <TabsContent value="survey" className="space-y-4">
               <Card>
                 <CardHeader>
@@ -571,6 +592,11 @@ export function ReviewDetailsModal({
                             Q{index + 1}: {answer.question}
                           </Label>
                           <p className="mt-2 text-foreground">{answer.answer}</p>
+                          {answer.surveyQuestionId && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Question ID: {answer.surveyQuestionId}
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -633,9 +659,9 @@ export function ReviewDetailsModal({
                         <div key={reply.id} className="flex gap-3">
                           <div className="flex-shrink-0">
                             {reply.fromBusiness ? (
-                              <Building className="h-5 w-5 text-primary" />
+                              <Building className="h-8 w-8 p-1.5 bg-primary/10 text-primary rounded-full" />
                             ) : (
-                              <User className="h-5 w-5 text-muted-foreground" />
+                              <User className="h-8 w-8 p-1.5 bg-muted text-muted-foreground rounded-full" />
                             )}
                           </div>
                           <div className="flex-1">
@@ -644,8 +670,11 @@ export function ReviewDetailsModal({
                               <span className="text-xs text-muted-foreground">
                                 {formatDate(reply.dateCreated)}
                               </span>
+                              {reply.fromBusiness && (
+                                <Badge variant="outline" className="text-xs">Business</Badge>
+                              )}
                             </div>
-                            <p className="text-sm">{reply.message}</p>
+                            <p className="text-sm text-foreground">{reply.message}</p>
                           </div>
                         </div>
                       ))}
@@ -657,25 +686,21 @@ export function ReviewDetailsModal({
               {/* Reply Form */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Send Response to Customer</CardTitle>
+                  <CardTitle>Send Response</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Respond professionally to show you care about customer feedback
+                    Reply to this customer review
                   </p>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     <Textarea
-                      placeholder="Write a thoughtful response to the customer..."
+                      placeholder="Type your response to the customer..."
                       value={replyMessage}
                       onChange={(e) => setReplyMessage(e.target.value)}
-                      rows={4}
-                      className="bg-background text-foreground border-border"
+                      className="min-h-[100px]"
                     />
-                    <div className="flex justify-between items-center">
-                      <p className="text-xs text-muted-foreground">
-                        💡 Tip: Thank them for their feedback and address any specific concerns
-                      </p>
-                      <Button 
+                    <div className="flex justify-end">
+                      <Button
                         onClick={handleSendReply}
                         disabled={!replyMessage.trim() || sendingReply}
                       >
