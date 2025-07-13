@@ -1,5 +1,5 @@
 // File: lib/api-client.ts
-// API client for GladGrade Portal backend with Review functionality
+// Path: lib/api-client.ts - UPDATED to use /portal/ endpoints
 
 import { getAuth } from "firebase/auth"
 
@@ -31,11 +31,33 @@ class ApiClient {
   }
 
   private async request(endpoint: string, options: RequestInit = {}) {
-    const url = endpoint.startsWith("http") ? endpoint : `/api${endpoint}`
+    // Use full URL in all environments since we removed local API routes
+    const baseUrl = this.baseUrl || process.env.NEXT_PUBLIC_API_URL || ""
+    const url = endpoint.startsWith("http") ? endpoint : `${baseUrl}/api${endpoint}`
+
+    // Get Firebase auth token
+    const auth = getAuth()
+    const user = auth.currentUser
+    let authHeaders = {}
+    
+    if (user) {
+      try {
+        const token = await user.getIdToken()
+        authHeaders = {
+          'Authorization': `Bearer ${token}`
+        }
+        console.log("🎫 Added auth token to request")
+      } catch (error) {
+        console.error("❌ Error getting auth token:", error)
+      }
+    } else {
+      console.log("⚠️ No authenticated user found")
+    }
 
     const config: RequestInit = {
       headers: {
         "Content-Type": "application/json",
+        ...authHeaders,
         ...options.headers,
       },
       ...options,
@@ -109,34 +131,34 @@ class ApiClient {
     }
   }
 
-  // Department API methods
+  // Department API methods - UPDATED to use /portal/settings/
   async getDepartments() {
-    return this.request("/settings/departments")
+    return this.request("/portal/settings/departments")
   }
 
   async createDepartment(department: { name: string; employee_count?: number; permissions?: string[] }) {
-    return this.request("/settings/departments", {
+    return this.request("/portal/settings/departments", {
       method: "POST",
       body: JSON.stringify(department),
     })
   }
 
   async updateDepartment(department: { id: number; name: string; employee_count: number; permissions: string[] }) {
-    return this.request("/settings/departments", {
+    return this.request("/portal/settings/departments", {
       method: "PUT",
       body: JSON.stringify(department),
     })
   }
 
   async deleteDepartment(id: number) {
-    return this.request(`/settings/departments?id=${id}`, {
+    return this.request(`/portal/settings/departments?id=${id}`, {
       method: "DELETE",
     })
   }
 
-  // Employee API methods
+  // Employee API methods - UPDATED to use /portal/employees/
   async getEmployees() {
-    return this.request("/employees")
+    return this.request("/portal/employees")
   }
 
   async createEmployee(employee: {
@@ -148,7 +170,7 @@ class ApiClient {
     create_firebase_account?: boolean
     temporary_password?: string
   }) {
-    return this.request("/employees", {
+    return this.request("/portal/employees", {
       method: "POST",
       body: JSON.stringify(employee),
     })
@@ -163,21 +185,21 @@ class ApiClient {
     status: string
     permissions: string[]
   }) {
-    return this.request("/employees", {
+    return this.request("/portal/employees", {
       method: "PUT",
       body: JSON.stringify(employee),
     })
   }
 
   async deleteEmployee(id: number) {
-    return this.request(`/employees?id=${id}`, {
+    return this.request(`/portal/employees?id=${id}`, {
       method: "DELETE",
     })
   }
 
-  // Business Client API methods
+  // Business Client API methods - UPDATED to use /portal/clients/
   async getClients() {
-    return this.request("/clients")
+    return this.request("/portal/clients")
   }
 
   async createClient(client: {
@@ -193,50 +215,148 @@ class ApiClient {
     create_firebase_account?: boolean
     temporary_password?: string
   }) {
-    return this.request("/clients", {
+    return this.request("/portal/clients", {
       method: "POST",
       body: JSON.stringify(client),
     })
   }
 
-  // Industry Categories API methods
-  async getIndustryCategories() {
-    return this.request("/industry-categories")
+  // Client locations methods - NEW
+  async getClientLocations(clientId: number) {
+    return this.request(`/portal/clients/${clientId}/locations`)
   }
 
-  // Organization settings API methods
+  async createClientLocation(clientId: number, location: {
+    location_name: string
+    address: string
+    place_id?: string
+    is_primary?: boolean
+    phone?: string
+    manager_name?: string
+    operating_hours?: string
+  }) {
+    return this.request(`/portal/clients/${clientId}/locations`, {
+      method: "POST",
+      body: JSON.stringify(location),
+    })
+  }
+
+  // Client users methods - NEW
+  async getClientUsers(clientId: number) {
+    return this.request(`/portal/clients/${clientId}/users`)
+  }
+
+  async createClientUser(clientId: number, user: {
+    email: string
+    full_name: string
+    role?: string
+    create_firebase_account?: boolean
+    temporary_password?: string
+  }) {
+    return this.request(`/portal/clients/${clientId}/users`, {
+      method: "POST",
+      body: JSON.stringify(user),
+    })
+  }
+
+  // Industry Categories API methods - UPDATED to use /portal/industry-categories/
+  async getIndustryCategories() {
+    return this.request("/portal/industry-categories")
+  }
+
+  // Positions API methods - NEW
+  async getPositions() {
+    return this.request("/portal/positions")
+  }
+
+  async createPosition(position: {
+    title: string
+    description?: string
+    level: number
+    additional_permissions?: string[]
+    can_access_sales?: boolean
+  }) {
+    return this.request("/portal/positions", {
+      method: "POST",
+      body: JSON.stringify(position),
+    })
+  }
+
+  // Sales API methods - NEW
+  async getProspects() {
+    return this.request("/portal/sales/prospects")
+  }
+
+  async createProspect(prospect: {
+    business_name: string
+    contact_name: string
+    contact_email: string
+    phone?: string
+    website?: string
+    business_address?: string
+    industry?: string
+    lead_source?: string
+    assigned_salesperson_id?: number
+    notes?: string
+  }) {
+    return this.request("/portal/sales/prospects", {
+      method: "POST",
+      body: JSON.stringify(prospect),
+    })
+  }
+
+  async convertProspect(prospectId: number, conversionData: {
+    industry_category_id?: number
+    number_of_locations?: number
+    security_level?: string
+  }) {
+    return this.request(`/portal/sales/prospects/${prospectId}/convert`, {
+      method: "POST",
+      body: JSON.stringify(conversionData),
+    })
+  }
+
+  async getServices() {
+    return this.request("/portal/sales/services")
+  }
+
+  async getSalesDashboard() {
+    return this.request("/portal/sales/dashboard")
+  }
+
+  // Organization settings API methods - UPDATED
   async getOrganizationSettings() {
-    return this.request("/settings/organization")
+    return this.request("/portal/settings/organization")
   }
 
   async updateOrganizationSettings(settings: any) {
-    return this.request("/settings/organization", {
+    return this.request("/portal/settings/organization", {
       method: "PUT",
       body: JSON.stringify(settings),
     })
   }
 
-  // Notification settings API methods
+  // Notification settings API methods - UPDATED
   async getNotificationSettings(userId: string) {
-    return this.request(`/settings/notifications?userId=${userId}`)
+    return this.request(`/portal/settings/notifications?userId=${userId}`)
   }
 
   async updateNotificationSettings(userId: string, settings: any) {
-    return this.request("/settings/notifications", {
+    return this.request("/portal/settings/notifications", {
       method: "PUT",
       body: JSON.stringify({ userId, ...settings }),
     })
   }
 
-  // Google Places search
+  // Google Places search - UPDATED
   async searchPlaces(query: string, location?: string) {
     const params = new URLSearchParams({ query })
     if (location) params.append("location", location)
 
-    return this.request(`/clients/search-places?${params.toString()}`)
+    return this.request(`/portal/clients/search-places?${params.toString()}`)
   }
 
-  // ===== NEW: REVIEW API METHODS =====
+  // ===== REVIEW API METHODS (these use gcloud-proxy, so they're correct) =====
 
   // Get review count for a single place
   async getReviewCount(params: ReviewCountParams) {
