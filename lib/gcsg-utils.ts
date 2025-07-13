@@ -79,7 +79,7 @@ export async function getGCSGScore(placeId: string): Promise<GCSGResponse> {
     
     // Call proxy instead of external API
     const response = await fetch(
-      `/api/gcloud-proxy/businesses/gcsg-score?placeId=${encodeURIComponent(placeId)}&indexed=true`,
+      `${process.env.NEXT_PUBLIC_API_URL}/api/businesses/gcsg-score?placeId=${encodeURIComponent(placeId)}&indexed=true`,
       {
         method: 'GET',
         headers: {
