@@ -308,11 +308,19 @@ class ApiClient {
     contact_email: string
     phone?: string
     website?: string
-    business_address?: string
-    industry?: string
+    street_address?: string
+    city?: string
+    state?: string
+    zip_code?: string
+    country?: string
+    formatted_address?: string
+    business_type?: string  // FIXED: Changed from 'industry' to 'business_type'
     lead_source?: string
     assigned_salesperson_id?: number
+    estimated_value?: number
+    priority?: string
     notes?: string
+    place_id?: string
   }) {
     return this.request("/portal/sales/prospects", {
       method: "POST",
@@ -363,12 +371,13 @@ class ApiClient {
     })
   }
 
-  // Google Places search - UPDATED
+ 
+  // Google Places search - FIXED to use portal/sales endpoint
   async searchPlaces(query: string, location?: string) {
     const params = new URLSearchParams({ query })
     if (location) params.append("location", location)
 
-    return this.request(`/portal/clients/search-places?${params.toString()}`)
+    return this.request(`/portal/sales/search-places?${params.toString()}`)
   }
 
   // ===== NEW: BUSINESS SECTORS API METHODS =====
