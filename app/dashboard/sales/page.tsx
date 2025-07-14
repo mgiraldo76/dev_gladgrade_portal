@@ -16,6 +16,7 @@ import { ProspectModal } from "@/components/prospect-modal"
 import { ConversionModal } from "@/components/conversion-modal"
 import { useAuth } from "@/app/providers"
 import { EditProspectModal } from "@/components/edit-prospect-modal"
+import { apiClient } from "@/lib/api-client"
 
 export default function SalesPage() {
   const { user, role } = useAuth()
@@ -49,36 +50,54 @@ export default function SalesPage() {
     loadData()
   }, [user, viewAll])
 
+  
   const loadData = async () => {
     try {
-      // Load stats
-      const statsResponse = await fetch("/api/sales/stats")
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json()
-        setStats(statsData.data || stats)
+      console.log("🔄 Loading sales dashboard data...")
+
+      // Load dashboard stats
+      try {
+        const statsData = await apiClient.getSalesDashboard()
+        setStats({
+          totalProspects: statsData.data?.prospects?.total || 0,
+          totalClients: statsData.data?.clients?.total || 0,
+          conversionRate: calculateConversionRate(statsData.data?.prospects?.total, statsData.data?.clients?.total),
+          totalCommissions: 0,
+          pendingCommissions: 0,
+          avgSalesCycle: 0,
+        })
+        console.log("✅ Dashboard stats loaded:", statsData.data)
+      } catch (statsError) {
+        console.error("❌ Error loading dashboard stats:", statsError)
       }
 
-      // Load prospects with role-based filtering
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const url = `/api/sales/prospects${viewAll ? "?view_all=true" : ""}`
-      const prospectsResponse = await fetch(url, { headers })
-
-      if (prospectsResponse.ok) {
-        const prospectsData = await prospectsResponse.json()
+      // ✅ FIXED: Pass viewAll parameter to API
+      try {
+        const prospectsData = await apiClient.getProspects(viewAll) // <-- This is the key fix
         setProspects(prospectsData.data || [])
-        setUserRole(prospectsData.user_role || "")
+        
+        // Set user permissions from API response
+        const currentUserRole = prospectsData.user_role || role || "employee"
+        setUserRole(currentUserRole)
         setCanViewAll(prospectsData.can_view_all || false)
-        console.log(`📊 Loaded ${prospectsData.data?.length || 0} prospects`)
+        
+        console.log(`✅ Loaded ${prospectsData.data?.length || 0} prospects (viewAll: ${viewAll}, role: ${currentUserRole})`)
+      } catch (prospectsError) {
+        console.error("❌ Error loading prospects:", prospectsError)
+        setProspects([])
       }
+
     } catch (error) {
-      console.error("Error loading sales data:", error)
+      console.error("❌ Error loading sales data:", error)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper function to calculate conversion rate
+  const calculateConversionRate = (totalProspects: number, totalClients: number) => {
+    if (!totalProspects || totalProspects === 0) return 0
+    return Math.round((totalClients / totalProspects) * 100)
   }
 
   const handleConvertProspect = (prospect: any) => {

@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar, Phone, Mail, MapPin, Globe, DollarSign, User, Building, Users, Shield, AlertTriangle, Crown, Star } from "lucide-react"
 import { useAuth } from "@/app/providers"
+import { apiClient } from "@/lib/api-client"
 
 interface EditProspectModalProps {
   isOpen: boolean
@@ -35,14 +36,14 @@ interface SalesEmployee {
   id: number
   full_name: string
   email: string
-  legacy_role: string
-  primary_role_name?: string
+  role: string  
   position_title?: string
   position_level?: number
-  department_name: string
-  has_sales_access: boolean
-  primary_is_sales: boolean
+  department_name?: string  
+  department_id?: number
   status: string
+  has_firebase_account?: boolean
+  isactive?: boolean
 }
 
 // US States dropdown data
@@ -138,10 +139,10 @@ function getEmployeePriority(employee: SalesEmployee, currentUserId?: number): n
   if (employee.position_title === "CCO") return 3
   
   // Sales Manager = 4th priority
-  if (employee.position_title === "Sales Manager" || employee.legacy_role === "sales_manager") return 4
-  
+  if (employee.position_title === "Sales Manager" || employee.role === "sales_manager") return 4
+
   // Other sales roles = 5th priority
-  if (employee.has_sales_access || employee.primary_is_sales) return 5
+  //if (employee.has_sales_access || employee.primary_is_sales) return 5
   
   // Everyone else = lowest priority
   return 6
@@ -152,7 +153,7 @@ function getEmployeeIcon(employee: SalesEmployee, currentUserId?: number) {
   if (employee.id === currentUserId) return <Star className="h-3 w-3 text-yellow-500" />
   if (employee.position_title === "CEO") return <Crown className="h-3 w-3 text-purple-500" />
   if (employee.position_title === "CCO") return <Shield className="h-3 w-3 text-blue-500" />
-  if (employee.position_title === "Sales Manager" || employee.legacy_role === "sales_manager") return <Users className="h-3 w-3 text-green-500" />
+  if (employee.position_title === "Sales Manager" || employee.role === "sales_manager") return <Users className="h-3 w-3 text-green-500" />
   return <User className="h-3 w-3 text-gray-500" />
 }
 
@@ -175,7 +176,7 @@ function getActivityIcon(activityType: string) {
 }
 
 export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRole }: EditProspectModalProps) {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const [loading, setLoading] = useState(false)
   const [activities, setActivities] = useState([])
   const [loadingActivities, setLoadingActivities] = useState(false)
@@ -215,7 +216,49 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
   })
 
   // Check if current user can reassign prospects
-  const canReassignProspects = ["super_admin", "sales_manager"].includes(userRole)
+  const canReassignProspects = [
+    "super_admin", 
+    "sales_manager", 
+    "admin", 
+    "cco"
+  ].includes(userRole) || [
+    "super_admin", 
+    "sales_manager", 
+    "admin", 
+    "cco"
+  ].includes(role || "") // ✅ FIXED: Now role is properly imported
+  
+  console.log("🔍 Permission check result:", {
+    userRole,
+    authContextRole: role,
+    canReassignProspects,
+    allowedRoles: ["super_admin", "sales_manager", "admin", "cco"]
+  })
+
+  console.log("🔍 Edit modal debug:", {
+    userRole: userRole,
+    authRole: role, // ✅ FIXED: Now role is properly available
+    prospectOwner: prospect?.assigned_salesperson_id,
+    prospectOwnerName: prospect?.assigned_salesperson_name
+  })
+
+
+
+  console.log("🔍 Permission check result:", {
+    userRole,
+    authContextRole: role,
+    canReassignProspects,
+    allowedRoles: ["super_admin", "sales_manager", "admin", "cco"]
+  })
+  console.log("🔍 Edit modal permissions check:", { userRole, canReassignProspects })
+
+  console.log("🔍 Edit modal debug:", {
+    userRole: userRole,
+    authRole: role, // from useAuth
+    prospectOwner: prospect?.assigned_salesperson_id,
+    prospectOwnerName: prospect?.assigned_salesperson_name
+  })
+
 
   // Initialize form data with address components
   useEffect(() => {
@@ -249,88 +292,84 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
 
   const loadBusinessSectors = async () => {
     try {
-      const response = await fetch("/api/business-sectors")
-      if (response.ok) {
-        const data = await response.json()
-        setBusinessSectors(data.data || [])
-      }
+      console.log("🔍 Loading business sectors via apiClient...")
+      const data = await apiClient.getBusinessSectors()
+      console.log("✅ Business sectors loaded:", data.data)
+      setBusinessSectors(data.data || [])
     } catch (error) {
-      console.error("Error loading business sectors:", error)
+      console.error("❌ Error loading business sectors:", error)
+      setBusinessSectors([])
     }
   }
 
   const loadSalesEmployees = async () => {
     setLoadingSalesEmployees(true)
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      // Use enhanced employees endpoint and filter for sales access
-      const response = await fetch("/api/employees/enhanced", { headers })
-      if (response.ok) {
-        const data = await response.json()
-        console.log("🔍 Raw employee data:", data.data)
+      // ✅ FIXED: Use apiClient instead of fetch
+      const data = await apiClient.getEmployees()
+      console.log("🔍 Raw employee data:", data.data)
+      
+      // Filter for employees with sales access using multiple criteria
+      const salesAccessEmployees = (data.data || []).filter((emp: SalesEmployee) => {
+        // Only show active employees
+        const isActive = emp.status === "active"
         
-        // Filter for employees with sales access using multiple criteria
-        const salesAccessEmployees = (data.data || []).filter((emp: SalesEmployee) => {
-          // Only show active employees
-          const isActive = emp.status === "active"
-          
-          if (!isActive) {
-            console.log(`❌ Skipping inactive employee: ${emp.full_name} (status: ${emp.status})`)
-            return false
-          }
-          
-          // Check enhanced role system
-          const hasEnhancedSalesAccess = emp.has_sales_access || emp.primary_is_sales || emp.position_title === "CEO"
-          
-          // Check legacy role system
-          const hasLegacySalesAccess = ["super_admin", "admin", "sales_manager", "sales", "employee"].includes(emp.legacy_role)
-          
-          // Check department
-          const isInSalesDept = emp.department_name?.toLowerCase().includes("sales")
-          
-          // Check position title
-          const hasSalesPosition = emp.position_title && ["CEO", "CCO", "Sales Manager", "Sales Director", "Sales Representative", "Account Manager"].includes(emp.position_title)
-          
-          console.log(`🔍 Employee ${emp.full_name}:`, {
-            isActive,
-            hasEnhancedSalesAccess,
-            hasLegacySalesAccess, 
-            isInSalesDept,
-            hasSalesPosition,
-            legacy_role: emp.legacy_role,
-            position_title: emp.position_title,
-            department_name: emp.department_name,
-            status: emp.status
-          })
-          
-          // Include if active AND any sales criteria matches
-          return isActive && (hasEnhancedSalesAccess || hasLegacySalesAccess || isInSalesDept || hasSalesPosition)
+        if (!isActive) {
+          console.log(`❌ Skipping inactive employee: ${emp.full_name} (status: ${emp.status})`)
+          return false
+        }
+        
+        // Check enhanced role system
+        const hasSalesAccess = 
+          emp.department_name === "Sales" || 
+          ["CEO", "CCO", "Sales Manager", "sales_manager"].includes(emp.role) ||
+          emp.position_title === "CEO"
+        //const hasEnhancedSalesAccess = emp.has_sales_access || emp.primary_is_sales || emp.position_title === "CEO"
+        
+        // Check legacy role system
+        //const hasLegacySalesAccess = ["super_admin", "admin", "sales_manager", "sales", "employee"].includes(emp.legacy_role)
+        
+        // Check department
+        const isInSalesDept = emp.department_name?.toLowerCase().includes("sales")
+        
+        // Check position title
+        const hasSalesPosition = emp.position_title && ["CEO", "CCO", "Sales Manager", "Sales Director", "Sales Representative", "Account Manager"].includes(emp.position_title)
+        
+        console.log(`🔍 Employee ${emp.full_name}:`, {
+          isActive,
+          //hasEnhancedSalesAccess,
+          //hasLegacySalesAccess, 
+          isInSalesDept,
+          hasSalesPosition,
+          role: emp.role,
+          position_title: emp.position_title,
+          department_name: emp.department_name,
+          status: emp.status
         })
         
-        console.log("🔍 Filtered sales employees:", salesAccessEmployees.length)
+        // Include if active AND any sales criteria matches
+        return isActive && (isInSalesDept || hasSalesPosition)
+      }) // This closes the filter function correctly
+      
+      
+      console.log("🔍 Filtered sales employees:", salesAccessEmployees.length)
+      
+      // Sort by priority: Current user, CEO, CCO, Sales Manager, then others
+      const sortedEmployees = salesAccessEmployees.sort((a: SalesEmployee, b: SalesEmployee) => {
+        const priorityA = getEmployeePriority(a, prospect?.assigned_salesperson_id)
+        const priorityB = getEmployeePriority(b, prospect?.assigned_salesperson_id)
         
-        // Sort by priority: Current user, CEO, CCO, Sales Manager, then others
-        const sortedEmployees = salesAccessEmployees.sort((a: SalesEmployee, b: SalesEmployee) => {
-          const priorityA = getEmployeePriority(a, prospect?.assigned_salesperson_id)
-          const priorityB = getEmployeePriority(b, prospect?.assigned_salesperson_id)
-          
-          if (priorityA !== priorityB) {
-            return priorityA - priorityB
-          }
-          
-          // Secondary sort by name
-          return a.full_name.localeCompare(b.full_name)
-        })
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB
+        }
         
-        setSalesEmployees(sortedEmployees)
-        console.log("✅ Loaded and sorted sales employees:", sortedEmployees.length, sortedEmployees)
-      } else {
-        console.error("Failed to load sales employees:", response.status, response.statusText)
-      }
+        // Secondary sort by name
+        return a.full_name.localeCompare(b.full_name)
+      })
+      
+      setSalesEmployees(sortedEmployees)
+      console.log("✅ Loaded and sorted sales employees:", sortedEmployees.length, sortedEmployees)
+      
     } catch (error) {
       console.error("Error loading sales employees:", error)
     } finally {
@@ -341,21 +380,16 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
   // Load activities function
   const loadActivities = async () => {
     if (!prospect?.id) return
-
+  
     setLoadingActivities(true)
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch(`/api/sales/activities?prospect_id=${prospect.id}`, { headers })
-      if (response.ok) {
-        const data = await response.json()
-        setActivities(data.data || [])
-      }
+      console.log(`🔍 Loading activities for prospect ${prospect.id} via apiClient...`)
+      const data = await apiClient.getProspectActivities(prospect.id)
+      console.log("✅ Activities loaded:", data.data)
+      setActivities(data.data || [])
     } catch (error) {
-      console.error("Error loading activities:", error)
+      console.error("❌ Error loading activities:", error)
+      setActivities([])
     } finally {
       setLoadingActivities(false)
     }
@@ -367,40 +401,26 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
       alert("Please enter a subject for the activity")
       return
     }
-
+  
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+      console.log("🔍 Adding activity via apiClient...")
+      const activityData = {
+        prospect_id: prospect.id,
+        activity_type: newActivity.activity_type,
+        subject: newActivity.subject,
+        description: newActivity.description,
       }
-
-      // Add authentication headers
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      console.log("🔍 Adding activity with headers:", headers)
-
-      const response = await fetch("/api/sales/activities", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          prospect_id: prospect.id,
-          ...newActivity,
-        }),
-      })
-
-      if (response.ok) {
-        setNewActivity({ activity_type: "call", subject: "", description: "" })
-        loadActivities() // Reload activities
-        alert("Activity added successfully!")
-      } else {
-        const errorData = await response.json()
-        console.error("Failed to add activity:", errorData)
-        alert(`Failed to add activity: ${errorData.error}`)
-      }
+      
+      const result = await apiClient.createProspectActivity(activityData)
+      console.log("✅ Activity added successfully:", result)
+      
+      setNewActivity({ activity_type: "call", subject: "", description: "" })
+      loadActivities() // Reload activities
+      alert("Activity added successfully!")
     } catch (error) {
-      console.error("Error adding activity:", error)
-      alert("Error adding activity")
+      console.error("❌ Error adding activity:", error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      alert("Error adding activity: " + errorMessage)
     }
   }
 
@@ -426,59 +446,56 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
+  
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      console.log("🔍 Submitting prospect update with headers:", headers)
+      console.log("🔍 Submitting prospect update")
       console.log("🔍 Form data:", formData)
-
+  
       // Format postal code and build complete address
       const formattedZip = formatPostalCode(formData.zip_code, formData.country)
       const fullAddress = `${formData.street_address}, ${formData.city}, ${formData.state} ${formattedZip}`.trim()
-
+  
       const isOwnershipChange = formData.assigned_salesperson_id !== prospect.assigned_salesperson_id?.toString()
-
+  
       const requestBody: any = {
-        id: prospect.id,
-        ...formData,
+        business_name: formData.business_name,
+        contact_name: formData.contact_name,
+        contact_email: formData.contact_email,
+        phone: formData.phone,
+        street_address: formData.street_address,
+        city: formData.city,
+        state: formData.state,
         zip_code: formattedZip,
+        country: formData.country,
         formatted_address: formData.formatted_address || fullAddress,
+        website: formData.website,
+        business_type: formData.business_type,
         estimated_value: Number.parseFloat(formData.estimated_value) || 0,
+        priority: formData.priority,
+        status: formData.status,
+        notes: formData.notes,
         assigned_salesperson_id: Number.parseInt(formData.assigned_salesperson_id) || prospect.assigned_salesperson_id,
       }
-
+  
       // Add change reason if ownership is changing
       if (isOwnershipChange && canReassignProspects) {
         requestBody.change_reason = changeReason || "Prospect reassignment via edit modal"
       }
-
-      const response = await fetch("/api/sales/prospects", {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(requestBody),
-      })
-
-      if (response.ok) {
-        onSuccess()
-        onClose()
-        // Reset change reason state
-        setChangeReason("")
-        setShowChangeReason(false)
-      } else {
-        const errorData = await response.json()
-        console.error("❌ Failed to update prospect:", errorData)
-        alert(`Failed to update prospect: ${errorData.error}`)
-      }
+  
+      // ✅ NEW: Use apiClient instead of fetch
+      const result = await apiClient.updateProspect(prospect.id, requestBody)
+  
+      console.log("✅ Prospect updated successfully:", result)
+  
+      onSuccess()
+      onClose()
+      setChangeReason("")
+      setShowChangeReason(false)
+  
     } catch (error) {
       console.error("❌ Error updating prospect:", error)
-      alert("Error updating prospect")
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      alert("Error updating prospect: " + errorMessage)
     } finally {
       setLoading(false)
     }
@@ -591,7 +608,7 @@ export function EditProspectModal({ isOpen, onClose, prospect, onSuccess, userRo
                                   )}
                                 </div>
                                 <div className="text-xs text-gray-500">
-                                  {employee.position_title || employee.primary_role_name || employee.legacy_role} 
+                                  {employee.position_title || employee.role} 
                                   {employee.department_name && ` • ${employee.department_name}`}
                                 </div>
                               </div>

@@ -1,5 +1,5 @@
 // File: lib/api-client.ts
-// Path: lib/api-client.ts - UPDATED to use /portal/ endpoints
+// Path: lib/api-client.ts - FIXED API client with proper routing
 
 import { getAuth } from "firebase/auth"
 
@@ -21,6 +21,13 @@ interface ReviewCountParams {
 
 interface BulkReviewCountParams {
   placeIds: string[]
+}
+
+interface ProspectActivity {
+  prospect_id: number
+  activity_type: string
+  subject: string
+  description?: string
 }
 
 class ApiClient {
@@ -81,21 +88,6 @@ class ApiClient {
     }
   }
 
-  // Helper function to get authentication token
-  private async getAuthToken(): Promise<string> {
-    try {
-      const auth = getAuth()
-      const user = auth.currentUser
-      if (user) {
-        return await user.getIdToken()
-      }
-      throw new Error('No authenticated user')
-    } catch (error) {
-      console.error('Error getting auth token:', error)
-      throw error
-    }
-  }
-
   // Helper for GC proxy requests with auth
   private async gcRequest(endpoint: string, options: RequestInit = {}) {
     try {
@@ -103,12 +95,30 @@ class ApiClient {
       if (typeof window === 'undefined') {
         throw new Error('GC requests can only be made from browser environment')
       }
-
+  
       const url = endpoint.startsWith("http") ? endpoint : `/api/gcloud-proxy${endpoint}`
-
+  
+      // Get Firebase auth token for gcloud-proxy
+      const auth = getAuth()
+      const user = auth.currentUser
+      let authHeaders = {}
+      
+      if (user) {
+        try {
+          const token = await user.getIdToken()
+          authHeaders = {
+            'Authorization': `Bearer ${token}`
+          }
+          console.log("🎫 Added auth token to gcloud-proxy request")
+        } catch (error) {
+          console.error("❌ Error getting auth token for gcloud-proxy:", error)
+        }
+      }
+  
       const config: RequestInit = {
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders,
           ...options.headers,
         },
         ...options,
@@ -283,8 +293,13 @@ class ApiClient {
   }
 
   // Sales API methods - NEW
-  async getProspects() {
-    return this.request("/portal/sales/prospects")
+  async getProspects(viewAll?: boolean, employeeId?: number) {
+    const params = new URLSearchParams()
+    if (viewAll) params.append("viewAll", "true")
+    if (employeeId) params.append("employeeId", employeeId.toString())
+    
+    const query = params.toString() ? `?${params.toString()}` : ""
+    return this.request(`/portal/sales/prospects${query}`)
   }
 
   async createProspect(prospect: {
@@ -356,6 +371,42 @@ class ApiClient {
     return this.request(`/portal/clients/search-places?${params.toString()}`)
   }
 
+  // ===== NEW: BUSINESS SECTORS API METHODS =====
+  // Get business sectors via gcloud-proxy (uses businesses.js routes)
+  async getBusinessSectors(businessSectorName?: string) {
+    return this.gcRequest('/businesses/businessSector/query', {
+      method: 'POST',
+      body: JSON.stringify({ businessSectorName })
+    })
+  }
+
+  // Create business sector
+  async createBusinessSector(sector: {
+    businessSectorName: string
+    other?: string
+    isExternal?: boolean
+    dateCreated?: string
+  }) {
+    return this.gcRequest('/businesses/businessSector', {
+      method: 'POST',
+      body: JSON.stringify(sector)
+    })
+  }
+
+  // ===== NEW: PROSPECT ACTIVITIES API METHODS =====
+  // Get activities for a prospect (temporary - endpoint doesn't exist yet)
+  async getProspectActivities(prospectId: number) {
+    return this.request(`/portal/sales/prospects/${prospectId}/activities`)
+  }
+  
+  // Create prospect activity
+  async createProspectActivity(activity: ProspectActivity) {
+    return this.request(`/portal/sales/prospects/${activity.prospect_id}/activities`, {
+      method: "POST",
+      body: JSON.stringify(activity),
+    })
+  }
+
   // ===== REVIEW API METHODS (these use gcloud-proxy, so they're correct) =====
 
   // Get review count for a single place
@@ -397,6 +448,33 @@ class ApiClient {
     })
   }
 
+  async updateProspect(prospectId: number, prospect: {
+    business_name?: string
+    contact_name?: string
+    contact_email?: string
+    phone?: string
+    website?: string
+    business_address?: string
+    street_address?: string
+    city?: string
+    state?: string
+    zip_code?: string
+    country?: string
+    formatted_address?: string
+    industry?: string
+    status?: string
+    priority?: string
+    assigned_salesperson_id?: number
+    estimated_value?: number
+    notes?: string
+    change_reason?: string
+  }) {
+    return this.request(`/portal/sales/prospects/${prospectId}`, {
+      method: "PUT",
+      body: JSON.stringify(prospect),
+    })
+  }
+
   // Convenience method for reviews namespace (optional - for organized access)
   reviews = {
     getCount: this.getReviewCount.bind(this),
@@ -404,6 +482,18 @@ class ApiClient {
     query: this.queryReviews.bind(this),
     getImages: this.getReviewImages.bind(this),
     moderate: this.moderateReview.bind(this)
+  }
+
+  // Convenience method for business sectors
+  businesses = {
+    getSectors: this.getBusinessSectors.bind(this),
+    createSector: this.createBusinessSector.bind(this)
+  }
+
+  // Convenience method for activities
+  activities = {
+    getProspectActivities: this.getProspectActivities.bind(this),
+    createProspectActivity: this.createProspectActivity.bind(this)
   }
 }
 
