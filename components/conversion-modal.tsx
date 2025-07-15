@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, DollarSign, Mail, QrCode, User, AlertCircle, CheckCircle } from "lucide-react"
+import { apiClient } from "@/lib/api-client"  // ✅ ADDED: Import apiClient
 
 interface ConversionModalProps {
   isOpen: boolean
@@ -29,7 +30,7 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
     serviceId: "",
     client_contact_name: prospect?.contact_name || "",
     client_contact_email: prospect?.contact_email || "",
-    contactPhone: prospect?.contact_phone || "",
+    client_contact_phone: prospect?.phone || "", // ✅ FIXED: Use 'phone' not 'contact_phone'
     notes: "",
     send_welcome_email: true,
     generate_qr_codes: true,
@@ -80,28 +81,17 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
         client_contact_email: formData.client_contact_email,
       })
 
-      const response = await fetch("/api/sales/prospects/convert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prospect_id: prospect.id,
-          conversion_value: conversionValueNum,
-          client_contact_name: formData.client_contact_name,
-          client_contact_email: formData.client_contact_email,
-          client_contact_phone: formData.contactPhone,
-          notes: formData.notes,
-          send_welcome_email: formData.send_welcome_email,
-          generate_qr_codes: formData.generate_qr_codes,
-          create_firebase_account: formData.create_firebase_account,
-        }),
-      })
-
-      const result = await response.json()
-      console.log("Conversion response:", result)
-
-      if (!response.ok) {
-        throw new Error(result.details || result.error || "Failed to convert prospect")
+      // ✅ FIXED: Use apiClient with proper data structure
+      const conversionData = {
+        conversion_value: conversionValueNum,
+        client_contact_name: formData.client_contact_name,
+        client_contact_email: formData.client_contact_email,
+        client_contact_phone: formData.client_contact_phone,
+        notes: formData.notes
       }
+
+      const result = await apiClient.convertProspect(prospect.id, conversionData)
+      console.log("Conversion response:", result)
 
       if (result.success) {
         setSuccess(result.message || "Prospect converted to client successfully!")
@@ -129,7 +119,7 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
       serviceId: "",
       client_contact_name: prospect?.contact_name || "",
       client_contact_email: prospect?.contact_email || "",
-      contactPhone: prospect?.contact_phone || "",
+      client_contact_phone: prospect?.phone || "", // ✅ FIXED: Use 'phone' not 'contact_phone'
       notes: "",
       send_welcome_email: true,
       generate_qr_codes: true,
@@ -273,56 +263,13 @@ export function ConversionModal({ isOpen, onClose, prospect, onSuccess }: Conver
             </div>
 
             <div>
-              <Label htmlFor="contactPhone" className="text-foreground">Contact Phone (Optional)</Label>
+              <Label htmlFor="client_contact_phone" className="text-foreground">Contact Phone (Optional)</Label>
               <Input
-                id="contactPhone"
-                value={formData.contactPhone}
-                onChange={(e) => updateFormData("contactPhone", e.target.value)}
+                id="client_contact_phone"
+                value={formData.client_contact_phone}
+                onChange={(e) => updateFormData("client_contact_phone", e.target.value)}
                 className="bg-background text-foreground border-border"
               />
-            </div>
-          </div>
-
-          {/* Automation Options */}
-          <div className="space-y-4">
-            <h3 className="font-medium text-foreground">Automation Options</h3>
-
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="send_welcome_email"
-                  checked={formData.send_welcome_email}
-                  onCheckedChange={(checked) => updateFormData("send_welcome_email", !!checked)}
-                />
-                <Label htmlFor="send_welcome_email" className="flex items-center gap-2 text-foreground">
-                  <Mail className="h-4 w-4" />
-                  Send welcome email with portal access
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="generate_qr_codes"
-                  checked={formData.generate_qr_codes}
-                  onCheckedChange={(checked) => updateFormData("generate_qr_codes", !!checked)}
-                />
-                <Label htmlFor="generate_qr_codes" className="flex items-center gap-2 text-foreground">
-                  <QrCode className="h-4 w-4" />
-                  Generate QR codes (business profile + menu)
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="create_firebase_account"
-                  checked={formData.create_firebase_account}
-                  onCheckedChange={(checked) => updateFormData("create_firebase_account", !!checked)}
-                />
-                <Label htmlFor="create_firebase_account" className="flex items-center gap-2 text-foreground">
-                  <User className="h-4 w-4" />
-                  Create client portal account
-                </Label>
-              </div>
             </div>
           </div>
 

@@ -329,9 +329,11 @@ class ApiClient {
   }
 
   async convertProspect(prospectId: number, conversionData: {
-    industry_category_id?: number
-    number_of_locations?: number
-    security_level?: string
+    conversion_value: number
+    client_contact_name: string
+    client_contact_email: string
+    client_contact_phone?: string
+    notes?: string
   }) {
     return this.request(`/portal/sales/prospects/${prospectId}/convert`, {
       method: "POST",
