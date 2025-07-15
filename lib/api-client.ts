@@ -1,5 +1,5 @@
 // File: lib/api-client.ts
-// Path: lib/api-client.ts - FIXED API client with proper routing
+// Path: lib/api-client.ts - FIXED gcRequest method for Firebase hosting
 
 import { getAuth } from "firebase/auth"
 
@@ -88,17 +88,19 @@ class ApiClient {
     }
   }
 
-  // Helper for GC proxy requests with auth
+  // FIXED: gcRequest method to work in Firebase hosting by calling Google Cloud Run directly
   private async gcRequest(endpoint: string, options: RequestInit = {}) {
     try {
       // Check if we're in a browser environment and have auth
       if (typeof window === 'undefined') {
         throw new Error('GC requests can only be made from browser environment')
       }
-  
-      const url = endpoint.startsWith("http") ? endpoint : `/api/gcloud-proxy${endpoint}`
-  
-      // Get Firebase auth token for gcloud-proxy
+
+      // FIXED: Use the same URL construction as request() method
+      const baseUrl = this.baseUrl || process.env.NEXT_PUBLIC_API_URL || ""
+      const url = endpoint.startsWith("http") ? endpoint : `${baseUrl}/api${endpoint}`
+
+      // Get Firebase auth token for gcloud requests
       const auth = getAuth()
       const user = auth.currentUser
       let authHeaders = {}
@@ -109,12 +111,12 @@ class ApiClient {
           authHeaders = {
             'Authorization': `Bearer ${token}`
           }
-          console.log("🎫 Added auth token to gcloud-proxy request")
+          console.log("🎫 Added auth token to gcloud request")
         } catch (error) {
-          console.error("❌ Error getting auth token for gcloud-proxy:", error)
+          console.error("❌ Error getting auth token for gcloud:", error)
         }
       }
-  
+
       const config: RequestInit = {
         headers: {
           "Content-Type": "application/json",
@@ -124,7 +126,7 @@ class ApiClient {
         ...options,
       }
 
-      console.log(`🌐 GC Proxy Request: ${options.method || "GET"} ${url}`)
+      console.log(`🌐 GCloud Request: ${options.method || "GET"} ${url}`)
 
       const response = await fetch(url, config)
       const data = await response.json()
@@ -133,10 +135,10 @@ class ApiClient {
         throw new Error(data.error || `HTTP error! status: ${response.status}`)
       }
 
-      console.log(`✅ GC Proxy Response: ${url}`, data)
+      console.log(`✅ GCloud Response: ${url}`, data)
       return data
     } catch (error) {
-      console.error(`❌ GC Proxy Error: ${endpoint}`, error)
+      console.error(`❌ GCloud Error: ${endpoint}`, error)
       throw error
     }
   }
@@ -373,7 +375,6 @@ class ApiClient {
     })
   }
 
- 
   // Google Places search - FIXED to use portal/sales endpoint
   async searchPlaces(query: string, location?: string) {
     const params = new URLSearchParams({ query })
@@ -418,7 +419,7 @@ class ApiClient {
     })
   }
 
-  // ===== REVIEW API METHODS (these use gcloud-proxy, so they're correct) =====
+  // ===== REVIEW API METHODS (these use gcRequest, now FIXED for Firebase hosting) =====
 
   // Get review count for a single place
   async getReviewCount(params: ReviewCountParams) {
@@ -459,6 +460,17 @@ class ApiClient {
     })
   }
 
+  // FIXED: Update review privacy - now uses gcRequest which calls Google Cloud Run directly
+  async updateReviewPrivacy(consumerReviewId: number, isPrivate: boolean) {
+    return this.gcRequest('/review/consumerReview/update', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        consumerReviewId,
+        isPrivate
+      })
+    })
+  }
+
   async updateProspect(prospectId: number, prospect: {
     business_name?: string
     contact_name?: string
@@ -492,7 +504,8 @@ class ApiClient {
     getBulkCounts: this.getBulkReviewCounts.bind(this),
     query: this.queryReviews.bind(this),
     getImages: this.getReviewImages.bind(this),
-    moderate: this.moderateReview.bind(this)
+    moderate: this.moderateReview.bind(this),
+    updatePrivacy: this.updateReviewPrivacy.bind(this)
   }
 
   // Convenience method for business sectors
