@@ -498,6 +498,41 @@ class ApiClient {
     })
   }
 
+  // ===== QR CODE API METHODS =====
+  // Generate QR code for a business client
+  async generateClientQRCode(clientId: number) {
+    return this.request(`/portal/clients/${clientId}/qr-code`, {
+      method: "POST",
+    })
+  }
+
+  // Send QR code via email to client
+  async sendClientQREmail(clientId: number, qrCodeData: {
+    qrCodeDataURL: string
+  }) {
+    return this.request(`/portal/clients/${clientId}/send-qr-email`, {
+      method: "POST",
+      body: JSON.stringify(qrCodeData),
+    })
+  }
+
+  async updateClient(clientId: number, clientData: {
+    business_name?: string
+    contact_name?: string
+    contact_email?: string
+    phone?: string
+    website?: string
+    business_type?: string
+    claim_status?: string
+    security_level?: string
+    sales_rep_id?: number | null
+  }) {
+    return this.request(`/portal/clients/${clientId}`, {
+      method: "PUT",
+      body: JSON.stringify(clientData),
+    })
+  }
+
   // Convenience method for reviews namespace (optional - for organized access)
   reviews = {
     getCount: this.getReviewCount.bind(this),

@@ -29,6 +29,8 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/app/providers"
 
+import { apiClient } from "@/lib/api-client"
+
 interface QRCodeModalProps {
   isOpen: boolean
   onClose: () => void
@@ -80,29 +82,19 @@ export function QRCodeModal({
     setError(null)
 
     try {
-      console.log(`🔄 Generating QR code for business ${businessId}...`)
+      console.log(`🔄 Generating QR code for business ${businessId} via apiClient...`)
       
-      const response = await fetch(`/api/clients/${businessId}/qr-code`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to generate QR code: ${response.statusText}`)
-      }
-
-      const result = await response.json()
+      // FIXED: Use apiClient instead of manual fetch
+      const result = await apiClient.generateClientQRCode(businessId)
       
       if (result.success) {
         setQrData(result.data)
-        console.log('✅ QR code generated successfully')
+        console.log('✅ QR code generated successfully via apiClient')
       } else {
         throw new Error(result.error || 'Failed to generate QR code')
       }
     } catch (err) {
-      console.error('❌ Error generating QR code:', err)
+      console.error('❌ Error generating QR code via apiClient:', err)
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setLoading(false)
@@ -364,41 +356,19 @@ export function QRCodeModal({
     setEmailSuccess(false)
 
     try {
-      console.log(`📧 Sending QR code email for business ${businessId}...`)
+      console.log(`📧 Sending QR code email for business ${businessId} via apiClient...`)
 
       // Generate full layout QR code data first
       const fullLayoutData = await generateFullLayoutForEmail()
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
-
-      // Add user authentication headers
-      if (user?.email) {
-        headers['x-user-email'] = user.email
-      }
-
-      // Send the full layout QR code data to the API
-      const requestBody = {
+      // FIXED: Use apiClient instead of manual fetch
+      const result = await apiClient.sendClientQREmail(businessId, {
         qrCodeDataURL: fullLayoutData || qrData.qrCodeDataURL // Fallback to basic QR if full layout fails
-      }
-
-      const response = await fetch(`/api/clients/${businessId}/send-qr-email`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `Failed to send email: ${response.statusText}`)
-      }
-
-      const result = await response.json()
       
       if (result.success) {
         setEmailSuccess(true)
-        console.log('✅ QR code email sent successfully')
+        console.log('✅ QR code email sent successfully via apiClient')
         
         // Auto-hide success message after 3 seconds
         setTimeout(() => {
@@ -408,7 +378,7 @@ export function QRCodeModal({
         throw new Error(result.error || 'Failed to send QR code email')
       }
     } catch (err) {
-      console.error('❌ Error sending QR code email:', err)
+      console.error('❌ Error sending QR code email via apiClient:', err)
       setEmailError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setEmailLoading(false)
