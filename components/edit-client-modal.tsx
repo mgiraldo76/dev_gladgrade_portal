@@ -220,7 +220,23 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     activity_type: "call",
     subject: "",
     description: "",
+    outcome: "",
+    next_action: "",
+    priority: "medium", 
+    scheduled_for: "",
   })
+
+  const resetActivityForm = () => {
+    setNewActivity({  // Changed from setActivityData to setNewActivity
+      activity_type: "call",
+      subject: "",
+      description: "",
+      outcome: "",
+      next_action: "",
+      priority: "medium",
+      scheduled_for: "",
+    })
+  }
 
   // Enhanced: Client form data with security_level
   const [formData, setFormData] = useState({
@@ -270,6 +286,17 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     new_password: "",
   })
 
+  /*const [activityData, setActivityData] = useState({
+    activity_type: "call",
+    subject: "",
+    description: "",
+    outcome: "",
+    next_action: "",
+    priority: "medium",
+    scheduled_for: "",
+  })*/
+
+
   // Initialize form data and load business locations
   useEffect(() => {
     if (client) {
@@ -317,17 +344,37 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   }
 
+
+  // 5. LOCATIONS - Replace handleDeleteLocation function
+  const handleDeleteLocation = async (locationId: number) => {
+    if (!confirm("Are you sure you want to delete this location?")) {
+      return
+    }
+
+    try {
+      console.log("🔍 Deleting location:", locationId)
+      await apiClient.deleteClientLocation(client.id, locationId)
+      console.log("✅ Location deleted successfully")
+      
+      loadBusinessLocations()
+      alert("Location deleted successfully!")
+    } catch (error) {
+      console.error("❌ Error deleting location:", error)
+      alert("Error deleting location")
+    }
+  }
+
+  // 6. USERS - Replace loadClientUsers function
   const loadClientUsers = async () => {
-    if (!client?.id) return
-  
     setLoadingUsers(true)
     try {
-      console.log(`🔍 Loading users for client ${client.id}`)
-      const data = await apiClient.getClientUsers(client.id)
-      console.log(`✅ Loaded ${data.data?.length || 0} users:`, data.data)
-      setClientUsers(data.data || [])
+      console.log("🔍 Loading users for client", client.id)
+      const response = await apiClient.getClientUsers(client.id)
+      setClientUsers(response.data || [])
+      console.log("✅ Loaded users:", response.data)
     } catch (error) {
-      console.error("❌ Error loading client users:", error)
+      console.error("❌ Error loading users:", error)
+      setClientUsers([])
     } finally {
       setLoadingUsers(false)
     }
@@ -358,12 +405,30 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   
     try {
-      // For now, just show success message since activities endpoint may not be implemented
-      alert("Activity functionality not yet implemented in API")
-      setNewActivity({ activity_type: "call", subject: "", description: "" })
+      console.log("🔍 Creating activity:", newActivity)
+      
+      const response = await apiClient.createClientActivity(client.id, {
+        activity_type: newActivity.activity_type,
+        subject: newActivity.subject.trim(),
+        description: newActivity.description?.trim() || "",
+        outcome: newActivity.outcome?.trim() || "",
+        next_action: newActivity.next_action?.trim() || "",
+        priority: newActivity.priority,
+        scheduled_for: newActivity.scheduled_for || "",
+      })
+  
+      console.log("✅ Activity created successfully:", response)
+      
+      // Reset form  
+      resetActivityForm()
+      
+      // Reload activities
+      loadActivities()
+      
+      alert("Activity created successfully!")
     } catch (error) {
-      console.error("Error adding activity:", error)
-      alert("Error adding activity")
+      console.error("❌ Error creating activity:", error)
+      alert("Error creating activity")
     }
   }
 
@@ -385,18 +450,138 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   }
 
-  const loadBusinessLocations = async () => {
-    if (!client?.id) return
+
+  // 1. ACTIVITIES - Replace loadActivities function
+  const loadActivities = async () => {
+    setLoadingActivities(true)
+    try {
+      console.log("🔍 Loading activities for client", client.id)
+      const response = await apiClient.getClientActivities(client.id)
+      setActivities(response.data || [])
+      console.log("✅ Loaded activities:", response.data)
+    } catch (error) {
+      console.error("❌ Error loading activities:", error)
+      setActivities([])
+    } finally {
+      setLoadingActivities(false)
+    }
+  }
   
+
+  // 2. ACTIVITIES - Replace handleActivitySubmit function  
+  const handleActivitySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!newActivity.subject.trim()) {  // Changed from activityData to newActivity
+      alert("Subject is required")
+      return
+    }
+  
+    try {
+      console.log("🔍 Creating activity:", newActivity)
+      
+      const response = await apiClient.createClientActivity(client.id, {
+        activity_type: newActivity.activity_type,
+        subject: newActivity.subject.trim(),
+        description: newActivity.description?.trim() || "",
+        outcome: newActivity.outcome?.trim() || "",
+        next_action: newActivity.next_action?.trim() || "",
+        priority: newActivity.priority,
+        scheduled_for: newActivity.scheduled_for || "",
+      })
+  
+      console.log("✅ Activity created successfully:", response)
+      
+      // Reset form
+      resetActivityForm()
+      
+      // Reload activities
+      loadActivities()
+      
+      alert("Activity created successfully!")
+    } catch (error) {
+      console.error("❌ Error creating activity:", error)
+      alert("Error creating activity")
+    }
+  }
+
+  const handleActivityChange = (field: string, value: string) => {
+    setNewActivity((prev) => ({ ...prev, [field]: value }))  // Changed from setActivityData to setNewActivity
+  }
+
+  const loadBusinessLocations = async () => {
     setLoadingLocations(true)
     try {
-      console.log(`🔍 Loading locations for client ${client.id}`)
-      const data = await apiClient.getClientLocations(client.id)
-      setBusinessLocations(data.data || [])
+      console.log("🔍 Loading locations for client", client.id)
+      const response = await apiClient.getClientLocations(client.id)
+      setBusinessLocations(response.data || [])
+      console.log("✅ Loaded locations:", response.data)
     } catch (error) {
-      console.error("Error loading business locations:", error)
+      console.error("❌ Error loading locations:", error)
+      setBusinessLocations([])
     } finally {
       setLoadingLocations(false)
+    }
+  }
+
+
+  // 4. LOCATIONS - Replace handleLocationSubmit function
+  const handleLocationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!locationData.location_name.trim() || !locationData.address.trim()) {
+      alert("Location name and address are required")
+      return
+    }
+
+    try {
+      if (selectedLocation) {
+        // UPDATE existing location
+        console.log("🔍 Updating location:", locationData)
+        
+        const updateData = {
+          location_name: locationData.location_name.trim(),
+          address: locationData.address.trim(),
+          city: locationData.city?.trim() || "",
+          state: locationData.state?.trim() || "",
+          postal_code: locationData.postal_code?.trim() || "",
+          country: locationData.country || "USA",
+          phone: locationData.phone?.trim() || "",
+          manager_name: locationData.manager_name?.trim() || "",
+          manager_email: locationData.manager_email?.trim() || "",
+          is_primary: locationData.is_primary || false,
+          place_id: locationData.place_id || "",
+        }
+
+        const response = await apiClient.updateClientLocation(client.id, selectedLocation.id, updateData)
+        console.log("✅ Location updated successfully:", response)
+        alert("Location updated successfully!")
+      } else {
+        // CREATE new location
+        console.log("🔍 Creating location:", locationData)
+        
+        const createData = {
+          location_name: locationData.location_name.trim(),
+          address: locationData.address.trim(),
+          place_id: selectedPlace?.place_id || locationData.place_id || "",
+          is_primary: locationData.is_primary || false,
+          phone: locationData.phone?.trim() || "",
+          manager_name: locationData.manager_name?.trim() || "",
+          operating_hours: "", // Add if you have this field
+        }
+
+        const response = await apiClient.createClientLocation(client.id, createData)
+        console.log("✅ Location created successfully:", response)
+        alert("Location created successfully!")
+      }
+
+      // Reset form and reload
+      resetLocationForm()
+      setIsLocationModalOpen(false)
+      loadBusinessLocations()
+    } catch (error) {
+      console.error("❌ Error saving location:", error)
+      alert("Error saving location")
     }
   }
 
@@ -538,137 +723,94 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     setIsEditUserModalOpen(true)
   }
 
+  
+  // 7. USERS - Replace handleSaveEditUser function
   const handleSaveEditUser = async () => {
     if (!editUser.email.trim() || !editUser.full_name.trim()) {
       alert("Email and full name are required")
       return
     }
-
+  
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
       const updateData: any = {
         email: editUser.email.trim(),
         full_name: editUser.full_name.trim(),
         role: editUser.role,
         status: editUser.status,
       }
-
-      if (editUser.reset_password) {
+  
+      const hasNewPassword = editUser.new_password && editUser.new_password.trim()
+      const forceReset = editUser.reset_password
+  
+      if (hasNewPassword || forceReset) {
         updateData.reset_password = true
       }
-
-      if (editUser.new_password && editUser.new_password.trim()) {
+  
+      if (hasNewPassword) {
         updateData.new_password = editUser.new_password.trim()
       }
-
+  
       console.log("🔍 Updating user with data:", {
         ...updateData,
         new_password: updateData.new_password ? '[REDACTED]' : undefined
       })
-
-      const response = await fetch(`/api/clients/${client.id}/users/${selectedEditUser.id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(updateData),
-      })
-
-      if (response.ok) {
-        const responseData = await response.json()
-        console.log("✅ User updated successfully:", responseData)
-        
-        loadClientUsers() // Reload users list
-        setIsEditUserModalOpen(false)
-        resetEditUserForm()
-        
-        alert("User updated successfully!")
-      } else {
-        const errorData = await response.json()
-        console.error("❌ Failed to update user:", errorData)
-        
-        // Show enhanced error message for email conflicts
-        if (errorData.errorCode === 'EMAIL_EXISTS') {
-          alert(errorData.error)
-        } else {
-          alert(`Failed to update user: ${errorData.error}`)
-        }
-      }
+  
+      const response = await apiClient.updateClientUser(client.id, selectedEditUser.id, updateData)
+  
+      console.log("✅ User updated successfully:", response)
+      
+      loadClientUsers()
+      setIsEditUserModalOpen(false)
+      resetEditUserForm()
+      
+      alert("User updated successfully!")
     } catch (error) {
       console.error("❌ Error updating user:", error)
       alert("Error updating user")
     }
   }
 
+  // 8. USERS - Replace handleDeleteUser function
   const handleDeleteUser = async (clientUser: any) => {
-    if (!confirm(`Are you sure you want to deactivate ${clientUser.full_name || clientUser.user_name}? This will disable their access to the client portal.`)) {
+    if (!confirm(`Are you sure you want to deactivate ${clientUser.full_name || clientUser.user_name}?`)) {
       return
     }
 
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch(`/api/clients/${client.id}/users/${clientUser.id}`, {
-        method: "DELETE",
-        headers,
-      })
-
-      if (response.ok) {
-        loadClientUsers() // Reload users list
-        alert("User deactivated successfully!")
-      } else {
-        const errorData = await response.json()
-        alert(`Failed to deactivate user: ${errorData.error}`)
-      }
+      console.log("🔍 Deactivating user:", clientUser.id)
+      await apiClient.deleteClientUser(client.id, clientUser.id)
+      console.log("✅ User deactivated successfully")
+      
+      loadClientUsers()
+      alert("User deactivated successfully!")
     } catch (error) {
-      console.error("Error deactivating user:", error)
+      console.error("❌ Error deactivating user:", error)
       alert("Error deactivating user")
     }
   }
 
-  // NEW: Reactivate user function
+
+  // 9. USERS - Replace handleReactivateUser function
   const handleReactivateUser = async (clientUser: any) => {
-    if (!confirm(`Are you sure you want to reactivate ${clientUser.full_name || clientUser.user_name}? This will restore their access to the client portal.`)) {
+    if (!confirm(`Are you sure you want to reactivate ${clientUser.full_name || clientUser.user_name}?`)) {
       return
     }
 
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch(`/api/clients/${client.id}/users/${clientUser.id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({
-          email: clientUser.email,
-          full_name: clientUser.full_name,
-          role: clientUser.role,
-          status: "active",
-        }),
+      console.log("🔍 Reactivating user:", clientUser.id)
+      
+      const response = await apiClient.updateClientUser(client.id, clientUser.id, {
+        email: clientUser.email,
+        full_name: clientUser.full_name,
+        role: clientUser.role,
+        status: "active",
       })
-
-      if (response.ok) {
-        loadClientUsers() // Reload users list
-        alert("User reactivated successfully!")
-      } else {
-        const errorData = await response.json()
-        alert(`Failed to reactivate user: ${errorData.error}`)
-      }
+      
+      console.log("✅ User reactivated successfully:", response)
+      loadClientUsers()
+      alert("User reactivated successfully!")
     } catch (error) {
-      console.error("Error reactivating user:", error)
+      console.error("❌ Error reactivating user:", error)
       alert("Error reactivating user")
     }
   }
@@ -1253,7 +1395,10 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                       }}>
                         Cancel
                       </Button>
-                      <Button onClick={handleLocationSave}>
+                      <Button onClick={(e) => {
+                        e.preventDefault()
+                        handleLocationSubmit(e)
+                      }}>
                         {selectedLocation ? "Update Location" : "Add Location"}
                       </Button>
                     </DialogFooter>
@@ -1562,8 +1707,9 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
             </Dialog>
           </TabsContent>
 
+          
           <TabsContent value="activities" className="space-y-4">
-            {/* Add New Activity Section - Identical to prospect modal */}
+            {/* Add New Activity Section */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -1572,89 +1718,154 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="activity_type">Activity Type</Label>
-                    <Select
-                      value={newActivity.activity_type}
-                      onValueChange={(value) => setNewActivity((prev) => ({ ...prev, activity_type: value }))}
-                    >
-                      <SelectTrigger  className="bg-background text-foreground border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="call">
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-green-500" />
-                            Phone Call
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="email">
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-blue-500" />
-                            Email
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="meeting">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-purple-500" />
-                            Meeting
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="note">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-gray-500" />
-                            Note
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="follow_up">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-yellow-500" />
-                            Follow Up
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="support">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-blue-500" />
-                            Support
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                <form onSubmit={handleActivitySubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="activity_type">Activity Type</Label>
+                      <Select
+                        value={newActivity.activity_type}
+                        onValueChange={(value) => handleActivityChange("activity_type", value)}
+                      >
+                        <SelectTrigger className="bg-background text-foreground border-border">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="call">
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-green-500" />
+                              Phone Call
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="email">
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-blue-500" />
+                              Email
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="meeting">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-purple-500" />
+                              Meeting
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="note">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-gray-500" />
+                              Note
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="follow_up">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-yellow-500" />
+                              Follow Up
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="support">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-blue-500" />
+                              Support
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="proposal">Proposal</SelectItem>
+                          <SelectItem value="contract">Contract</SelectItem>
+                          <SelectItem value="payment">Payment</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="priority">Priority</Label>
+                      <Select 
+                        value={newActivity.priority} 
+                        onValueChange={(value) => handleActivityChange("priority", value)}
+                      >
+                        <SelectTrigger className="bg-background text-foreground border-border">
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="subject">Subject *</Label>
                     <Input
                       id="subject"
                       value={newActivity.subject}
-                      onChange={(e) => setNewActivity((prev) => ({ ...prev, subject: e.target.value }))}
+                      onChange={(e) => handleActivityChange("subject", e.target.value)}
                       placeholder="Brief description of activity"
                       required
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={newActivity.description}
-                    onChange={(e) => setNewActivity((prev) => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    placeholder="Detailed notes about the activity, outcome, next steps..."
-                  />
-                </div>
-                <Button 
-                  onClick={handleAddActivity} 
-                  disabled={!newActivity.subject.trim()}
-                  className="w-full"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Add Activity
-                </Button>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={newActivity.description}
+                      onChange={(e) => handleActivityChange("description", e.target.value)}
+                      rows={3}
+                      placeholder="Detailed notes about the activity, outcome, next steps..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="outcome">Outcome</Label>
+                      <Select 
+                        value={newActivity.outcome} 
+                        onValueChange={(value) => handleActivityChange("outcome", value)}
+                      >
+                        <SelectTrigger className="bg-background text-foreground border-border">
+                          <SelectValue placeholder="Select outcome" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">No outcome selected</SelectItem>
+                          <SelectItem value="positive">Positive</SelectItem>
+                          <SelectItem value="neutral">Neutral</SelectItem>
+                          <SelectItem value="negative">Negative</SelectItem>
+                          <SelectItem value="no_response">No Response</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="pending">Pending</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="scheduled_for">Scheduled For</Label>
+                      <Input
+                        id="scheduled_for"
+                        type="datetime-local"
+                        value={newActivity.scheduled_for}
+                        onChange={(e) => handleActivityChange("scheduled_for", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="next_action">Next Action</Label>
+                    <Input
+                      id="next_action"
+                      value={newActivity.next_action}
+                      onChange={(e) => handleActivityChange("next_action", e.target.value)}
+                      placeholder="What should be done next?"
+                    />
+                  </div>
+
+                  <Button type="submit" disabled={!newActivity.subject.trim()} className="w-full">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Add Activity
+                  </Button>
+                </form>
               </CardContent>
             </Card>
 
-            {/* Activities List - Identical to prospect modal */}
+            {/* Activities List */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">

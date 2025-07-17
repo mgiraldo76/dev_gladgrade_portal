@@ -533,6 +533,84 @@ class ApiClient {
     })
   }
 
+
+
+
+
+
+
+// Client locations methods - ADD MISSING UPDATE AND DELETE
+async updateClientLocation(clientId: number, locationId: number, location: {
+  location_name?: string
+  address?: string
+  city?: string
+  state?: string
+  postal_code?: string
+  country?: string
+  place_id?: string
+  is_primary?: boolean
+  phone?: string
+  manager_name?: string
+  manager_email?: string
+  operating_hours?: string
+}) {
+  return this.request(`/portal/clients/${clientId}/locations/${locationId}`, {
+    method: "PUT",
+    body: JSON.stringify(location),
+  })
+}
+
+async deleteClientLocation(clientId: number, locationId: number) {
+  return this.request(`/portal/clients/${clientId}/locations/${locationId}`, {
+    method: "DELETE",
+  })
+}
+
+// Client users methods - ADD MISSING UPDATE AND DELETE
+async updateClientUser(clientId: number, userId: number, user: {
+  email?: string
+  full_name?: string
+  role?: string
+  status?: string
+  reset_password?: boolean
+  new_password?: string
+}) {
+  return this.request(`/portal/clients/${clientId}/users/${userId}`, {
+    method: "PUT",
+    body: JSON.stringify(user),
+  })
+}
+
+async deleteClientUser(clientId: number, userId: number) {
+  return this.request(`/portal/clients/${clientId}/users/${userId}`, {
+    method: "DELETE",
+  })
+}
+
+// Client activities methods - ADD NEW ACTIVITY METHODS
+async getClientActivities(clientId: number) {
+  return this.request(`/portal/clients/${clientId}/activities`)
+}
+
+async createClientActivity(clientId: number, activity: {
+  activity_type: string
+  subject: string
+  description?: string
+  outcome?: string
+  next_action?: string
+  priority?: string
+  scheduled_for?: string
+}) {
+  return this.request(`/portal/clients/${clientId}/activities`, {
+    method: "POST",
+    body: JSON.stringify(activity),
+  })
+}
+
+
+
+
+
   // Convenience method for reviews namespace (optional - for organized access)
   reviews = {
     getCount: this.getReviewCount.bind(this),
