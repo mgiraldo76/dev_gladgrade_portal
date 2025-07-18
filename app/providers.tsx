@@ -8,10 +8,12 @@ import { auth } from "@/services/firebase"
 import { ThemeProvider } from "@/components/theme-provider"
 
 type UserRole = "super_admin" | "admin" | "moderator" | "employee" | "client" | null
+type ClientRole = "client_admin" | "client_moderator" | "client_user" | "client_viewer" | null
 
 interface AuthContextType {
   user: User | null
   role: UserRole
+  clientRole: ClientRole
   businessId: number | null
   loading: boolean
   isFirebaseConfigured: boolean
@@ -20,6 +22,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   role: null,
+  clientRole: null,
   businessId: null,
   loading: true,
   isFirebaseConfigured: false,
@@ -74,6 +77,7 @@ function getUserRoleFromEmail(email: string): UserRole {
 function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [role, setRole] = useState<UserRole>(null)
+  const [clientRole, setClientRole] = useState<ClientRole>(null)
   const [businessId, setBusinessId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(false)
@@ -107,6 +111,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             const token = await user.getIdTokenResult()
             let userRole = token.claims.role as UserRole
             let userBusinessId: number | null = null
+            let userClientRole: ClientRole = null
 
             console.log("🏷️ Custom claim role:", userRole)
 
@@ -114,6 +119,12 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             if (userRole === "client" && token.claims.businessId) {
               userBusinessId = parseInt(token.claims.businessId as string)
               console.log("🏢 Client businessId extracted:", userBusinessId)
+              
+              // Extract client role
+              if (token.claims.user_role) {
+                userClientRole = token.claims.user_role as ClientRole
+                console.log("👤 Client role extracted:", userClientRole)
+              }
             }
 
             // If no custom claim exists, determine role from email domain
@@ -123,20 +134,24 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             }
 
             setRole(userRole)
+            setClientRole(userClientRole)
             setBusinessId(userBusinessId)
             console.log("✅ Final role set:", userRole)
+            console.log("✅ Final clientRole set:", userClientRole)
             console.log("✅ Final businessId set:", userBusinessId)
           } catch (error) {
             console.error("❌ Error getting user role:", error)
             // Fallback to email-based role assignment
             const fallbackRole = getUserRoleFromEmail(user.email)
             setRole(fallbackRole)
+            setClientRole(null)
             setBusinessId(null)
             console.log(`🔄 Fallback role assigned: ${user.email} → ${fallbackRole}`)
           }
         } else {
           console.log("👤 No user, setting role and businessId to null")
           setRole(null)
+          setClientRole(null)
           setBusinessId(null)
         }
 
@@ -156,7 +171,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, role, businessId, loading, isFirebaseConfigured }}>
+    <AuthContext.Provider value={{ user, role, clientRole, businessId, loading, isFirebaseConfigured }}>
       {children}
     </AuthContext.Provider>
   )
