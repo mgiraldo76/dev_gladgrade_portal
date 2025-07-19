@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "reactgladgrade"
-  }
+  },
+  "targets": {
+    "reactgladgrade": {
+      "hosting": {
+        "dev-portal": [
+          "devportalgladgradecom"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

@@ -1,5 +1,5 @@
 // File: lib/api-client.ts
-// Path: lib/api-client.ts - UPDATED to use /portal/ endpoints
+// Path: lib/api-client.ts - FIXED gcRequest method for Firebase hosting
 
 import { getAuth } from "firebase/auth"
 
@@ -21,6 +21,13 @@ interface ReviewCountParams {
 
 interface BulkReviewCountParams {
   placeIds: string[]
+}
+
+interface ProspectActivity {
+  prospect_id: number
+  activity_type: string
+  subject: string
+  description?: string
 }
 
 class ApiClient {
@@ -81,22 +88,7 @@ class ApiClient {
     }
   }
 
-  // Helper function to get authentication token
-  private async getAuthToken(): Promise<string> {
-    try {
-      const auth = getAuth()
-      const user = auth.currentUser
-      if (user) {
-        return await user.getIdToken()
-      }
-      throw new Error('No authenticated user')
-    } catch (error) {
-      console.error('Error getting auth token:', error)
-      throw error
-    }
-  }
-
-  // Helper for GC proxy requests with auth
+  // FIXED: gcRequest method to work in Firebase hosting by calling Google Cloud Run directly
   private async gcRequest(endpoint: string, options: RequestInit = {}) {
     try {
       // Check if we're in a browser environment and have auth
@@ -104,17 +96,37 @@ class ApiClient {
         throw new Error('GC requests can only be made from browser environment')
       }
 
-      const url = endpoint.startsWith("http") ? endpoint : `/api/gcloud-proxy${endpoint}`
+      // FIXED: Use the same URL construction as request() method
+      const baseUrl = this.baseUrl || process.env.NEXT_PUBLIC_API_URL || ""
+      const url = endpoint.startsWith("http") ? endpoint : `${baseUrl}/api${endpoint}`
+
+      // Get Firebase auth token for gcloud requests
+      const auth = getAuth()
+      const user = auth.currentUser
+      let authHeaders = {}
+      
+      if (user) {
+        try {
+          const token = await user.getIdToken()
+          authHeaders = {
+            'Authorization': `Bearer ${token}`
+          }
+          console.log("🎫 Added auth token to gcloud request")
+        } catch (error) {
+          console.error("❌ Error getting auth token for gcloud:", error)
+        }
+      }
 
       const config: RequestInit = {
         headers: {
           "Content-Type": "application/json",
+          ...authHeaders,
           ...options.headers,
         },
         ...options,
       }
 
-      console.log(`🌐 GC Proxy Request: ${options.method || "GET"} ${url}`)
+      console.log(`🌐 GCloud Request: ${options.method || "GET"} ${url}`)
 
       const response = await fetch(url, config)
       const data = await response.json()
@@ -123,10 +135,10 @@ class ApiClient {
         throw new Error(data.error || `HTTP error! status: ${response.status}`)
       }
 
-      console.log(`✅ GC Proxy Response: ${url}`, data)
+      console.log(`✅ GCloud Response: ${url}`, data)
       return data
     } catch (error) {
-      console.error(`❌ GC Proxy Error: ${endpoint}`, error)
+      console.error(`❌ GCloud Error: ${endpoint}`, error)
       throw error
     }
   }
@@ -283,8 +295,13 @@ class ApiClient {
   }
 
   // Sales API methods - NEW
-  async getProspects() {
-    return this.request("/portal/sales/prospects")
+  async getProspects(viewAll?: boolean, employeeId?: number) {
+    const params = new URLSearchParams()
+    if (viewAll) params.append("viewAll", "true")
+    if (employeeId) params.append("employeeId", employeeId.toString())
+    
+    const query = params.toString() ? `?${params.toString()}` : ""
+    return this.request(`/portal/sales/prospects${query}`)
   }
 
   async createProspect(prospect: {
@@ -293,11 +310,19 @@ class ApiClient {
     contact_email: string
     phone?: string
     website?: string
-    business_address?: string
-    industry?: string
+    street_address?: string
+    city?: string
+    state?: string
+    zip_code?: string
+    country?: string
+    formatted_address?: string
+    business_type?: string  // FIXED: Changed from 'industry' to 'business_type'
     lead_source?: string
     assigned_salesperson_id?: number
+    estimated_value?: number
+    priority?: string
     notes?: string
+    place_id?: string
   }) {
     return this.request("/portal/sales/prospects", {
       method: "POST",
@@ -306,9 +331,11 @@ class ApiClient {
   }
 
   async convertProspect(prospectId: number, conversionData: {
-    industry_category_id?: number
-    number_of_locations?: number
-    security_level?: string
+    conversion_value: number
+    client_contact_name: string
+    client_contact_email: string
+    client_contact_phone?: string
+    notes?: string
   }) {
     return this.request(`/portal/sales/prospects/${prospectId}/convert`, {
       method: "POST",
@@ -348,15 +375,51 @@ class ApiClient {
     })
   }
 
-  // Google Places search - UPDATED
+  // Google Places search - FIXED to use portal/sales endpoint
   async searchPlaces(query: string, location?: string) {
     const params = new URLSearchParams({ query })
     if (location) params.append("location", location)
 
-    return this.request(`/portal/clients/search-places?${params.toString()}`)
+    return this.request(`/portal/sales/search-places?${params.toString()}`)
   }
 
-  // ===== REVIEW API METHODS (these use gcloud-proxy, so they're correct) =====
+  // ===== NEW: BUSINESS SECTORS API METHODS =====
+  // Get business sectors via gcloud-proxy (uses businesses.js routes)
+  async getBusinessSectors(businessSectorName?: string) {
+    return this.gcRequest('/businesses/businessSector/query', {
+      method: 'POST',
+      body: JSON.stringify({ businessSectorName })
+    })
+  }
+
+  // Create business sector
+  async createBusinessSector(sector: {
+    businessSectorName: string
+    other?: string
+    isExternal?: boolean
+    dateCreated?: string
+  }) {
+    return this.gcRequest('/businesses/businessSector', {
+      method: 'POST',
+      body: JSON.stringify(sector)
+    })
+  }
+
+  // ===== NEW: PROSPECT ACTIVITIES API METHODS =====
+  // Get activities for a prospect (temporary - endpoint doesn't exist yet)
+  async getProspectActivities(prospectId: number) {
+    return this.request(`/portal/sales/prospects/${prospectId}/activities`)
+  }
+  
+  // Create prospect activity
+  async createProspectActivity(activity: ProspectActivity) {
+    return this.request(`/portal/sales/prospects/${activity.prospect_id}/activities`, {
+      method: "POST",
+      body: JSON.stringify(activity),
+    })
+  }
+
+  // ===== REVIEW API METHODS (these use gcRequest, now FIXED for Firebase hosting) =====
 
   // Get review count for a single place
   async getReviewCount(params: ReviewCountParams) {
@@ -397,13 +460,177 @@ class ApiClient {
     })
   }
 
+  // FIXED: Update review privacy - now uses gcRequest which calls Google Cloud Run directly
+  async updateReviewPrivacy(consumerReviewId: number, isPrivate: boolean) {
+    return this.gcRequest('/review/consumerReview/update', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        consumerReviewId,
+        isPrivate
+      })
+    })
+  }
+
+  async updateProspect(prospectId: number, prospect: {
+    business_name?: string
+    contact_name?: string
+    contact_email?: string
+    phone?: string
+    website?: string
+    business_address?: string
+    street_address?: string
+    city?: string
+    state?: string
+    zip_code?: string
+    country?: string
+    formatted_address?: string
+    industry?: string
+    status?: string
+    priority?: string
+    assigned_salesperson_id?: number
+    estimated_value?: number
+    notes?: string
+    change_reason?: string
+  }) {
+    return this.request(`/portal/sales/prospects/${prospectId}`, {
+      method: "PUT",
+      body: JSON.stringify(prospect),
+    })
+  }
+
+  // ===== QR CODE API METHODS =====
+  // Generate QR code for a business client
+  async generateClientQRCode(clientId: number) {
+    return this.request(`/portal/clients/${clientId}/qr-code`, {
+      method: "POST",
+    })
+  }
+
+  // Send QR code via email to client
+  async sendClientQREmail(clientId: number, qrCodeData: {
+    qrCodeDataURL: string
+  }) {
+    return this.request(`/portal/clients/${clientId}/send-qr-email`, {
+      method: "POST",
+      body: JSON.stringify(qrCodeData),
+    })
+  }
+
+  async updateClient(clientId: number, clientData: {
+    business_name?: string
+    contact_name?: string
+    contact_email?: string
+    phone?: string
+    website?: string
+    business_type?: string
+    claim_status?: string
+    security_level?: string
+    sales_rep_id?: number | null
+  }) {
+    return this.request(`/portal/clients/${clientId}`, {
+      method: "PUT",
+      body: JSON.stringify(clientData),
+    })
+  }
+
+
+
+
+
+
+
+// Client locations methods - ADD MISSING UPDATE AND DELETE
+async updateClientLocation(clientId: number, locationId: number, location: {
+  location_name?: string
+  address?: string
+  city?: string
+  state?: string
+  postal_code?: string
+  country?: string
+  place_id?: string
+  is_primary?: boolean
+  phone?: string
+  manager_name?: string
+  manager_email?: string
+  operating_hours?: string
+}) {
+  return this.request(`/portal/clients/${clientId}/locations/${locationId}`, {
+    method: "PUT",
+    body: JSON.stringify(location),
+  })
+}
+
+async deleteClientLocation(clientId: number, locationId: number) {
+  return this.request(`/portal/clients/${clientId}/locations/${locationId}`, {
+    method: "DELETE",
+  })
+}
+
+// Client users methods - ADD MISSING UPDATE AND DELETE
+async updateClientUser(clientId: number, userId: number, user: {
+  email?: string
+  full_name?: string
+  role?: string
+  status?: string
+  reset_password?: boolean
+  new_password?: string
+}) {
+  return this.request(`/portal/clients/${clientId}/users/${userId}`, {
+    method: "PUT",
+    body: JSON.stringify(user),
+  })
+}
+
+async deleteClientUser(clientId: number, userId: number) {
+  return this.request(`/portal/clients/${clientId}/users/${userId}`, {
+    method: "DELETE",
+  })
+}
+
+// Client activities methods - ADD NEW ACTIVITY METHODS
+async getClientActivities(clientId: number) {
+  return this.request(`/portal/clients/${clientId}/activities`)
+}
+
+async createClientActivity(clientId: number, activity: {
+  activity_type: string
+  subject: string
+  description?: string
+  outcome?: string
+  next_action?: string
+  priority?: string
+  scheduled_for?: string
+}) {
+  return this.request(`/portal/clients/${clientId}/activities`, {
+    method: "POST",
+    body: JSON.stringify(activity),
+  })
+}
+
+
+
+
+
   // Convenience method for reviews namespace (optional - for organized access)
   reviews = {
     getCount: this.getReviewCount.bind(this),
     getBulkCounts: this.getBulkReviewCounts.bind(this),
     query: this.queryReviews.bind(this),
     getImages: this.getReviewImages.bind(this),
-    moderate: this.moderateReview.bind(this)
+    moderate: this.moderateReview.bind(this),
+    updatePrivacy: this.updateReviewPrivacy.bind(this)
+  }
+
+  // Convenience method for business sectors
+  businesses = {
+    getSectors: this.getBusinessSectors.bind(this),
+    createSector: this.createBusinessSector.bind(this)
+  }
+
+  // Convenience method for activities
+  activities = {
+    getProspectActivities: this.getProspectActivities.bind(this),
+    createProspectActivity: this.createProspectActivity.bind(this)
   }
 }
 

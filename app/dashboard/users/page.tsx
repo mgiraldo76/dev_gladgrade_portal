@@ -26,10 +26,11 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedRole, setSelectedRole] = useState("all")
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false)
-  const [isCreateClientOpen, setIsCreateClientOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<any[]>([])
   const [departments, setDepartments] = useState<any[]>([])
+  //const [clients, setClients] = useState<any[]>([])
+  //const [clientsLoading, setClientsLoading] = useState(true)
 
   const [isEditEmployeeOpen, setIsEditEmployeeOpen] = useState(false)
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null)
@@ -60,6 +61,7 @@ export default function UserManagement() {
 
   const loadData = async () => {
     setLoading(true)
+    //setClientsLoading(true)
     try {
       console.log("📊 Loading employees and departments...")
 
@@ -76,10 +78,19 @@ export default function UserManagement() {
         setDepartments(deptResponse.data)
         console.log("✅ Departments loaded:", deptResponse.data.length)
       }
+
+      // Load clients
+      //console.log("📊 Loading business clients...")
+      //const clientResponse = await apiClient.getClients()
+      //if (clientResponse.success) {
+      //  setClients(clientResponse.data)
+      //  console.log("✅ Clients loaded:", clientResponse.data.length)
+      //}
     } catch (error) {
       console.error("❌ Error loading data:", error)
     } finally {
       setLoading(false)
+      //setClientsLoading(false)
     }
   }
 
@@ -179,33 +190,6 @@ export default function UserManagement() {
       alert("Failed to update employee. Please try again.")
     }
   }
-
-  const clients = [
-    {
-      id: 1,
-      businessName: "Miami Beach Restaurant",
-      contactName: "Carlos Martinez",
-      email: "carlos@miamibeach.com",
-      securityLevel: "verified",
-      gcsgScore: 785,
-      status: "active",
-      joinDate: "2024-01-15",
-      locations: 3,
-      monthlyReviews: 45,
-    },
-    {
-      id: 2,
-      businessName: "Downtown Coffee Shop",
-      contactName: "Emma Wilson",
-      email: "emma@downtowncoffee.com",
-      securityLevel: "pending",
-      gcsgScore: 692,
-      status: "pending_verification",
-      joinDate: "2024-06-10",
-      locations: 1,
-      monthlyReviews: 12,
-    },
-  ]
 
   const securityLevels = [
     { value: "verified", label: "Verified", color: "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800" },
@@ -460,76 +444,6 @@ export default function UserManagement() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-
-          <Dialog open={isCreateClientOpen} onOpenChange={setIsCreateClientOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Building className="h-4 w-4 mr-2" />
-                Add Client
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md bg-background border-border">
-              <DialogHeader className="pb-4">
-                <DialogTitle className="text-xl font-semibold text-foreground">Register New Client</DialogTitle>
-                <DialogDescription className="text-muted-foreground">
-                  Add a new business to the GladGrade platform
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="biz-name" className="text-foreground">Business Name</Label>
-                  <Input id="biz-name" placeholder="Amazing Restaurant" className="bg-background text-foreground border-border" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact-name" className="text-foreground">Contact Person</Label>
-                  <Input id="contact-name" placeholder="Jane Smith" className="bg-background text-foreground border-border" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="biz-email" className="text-foreground">Business Email</Label>
-                  <Input id="biz-email" type="email" placeholder="jane@amazing-restaurant.com" className="bg-background text-foreground border-border" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="security-level" className="text-foreground">Security Level</Label>
-                  <Select>
-                    <SelectTrigger className="bg-background text-foreground border-border">
-                      <SelectValue placeholder="Set security level" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-gray-300">
-                      <SelectItem value="pending" className="text-black hover:bg-gray-100">Pending Verification</SelectItem>
-                      <SelectItem value="verified" className="text-black hover:bg-gray-100">Verified</SelectItem>
-                      <SelectItem value="flagged" className="text-black hover:bg-gray-100">Security Review Required</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="locations" className="text-foreground">Number of Locations</Label>
-                  <Input id="locations" type="number" placeholder="1" className="bg-background text-foreground border-border" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="industry" className="text-foreground">Industry Category</Label>
-                  <Select>
-                    <SelectTrigger className="bg-background text-foreground border-border">
-                      <SelectValue placeholder="Select industry" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-gray-300">
-                      <SelectItem value="restaurant" className="text-black hover:bg-gray-100">Restaurant & Food</SelectItem>
-                      <SelectItem value="retail" className="text-black hover:bg-gray-100">Retail</SelectItem>
-                      <SelectItem value="healthcare" className="text-black hover:bg-gray-100">Healthcare</SelectItem>
-                      <SelectItem value="education" className="text-black hover:bg-gray-100">Education</SelectItem>
-                      <SelectItem value="entertainment" className="text-black hover:bg-gray-100">Entertainment</SelectItem>
-                      <SelectItem value="services" className="text-black hover:bg-gray-100">Professional Services</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter className="pt-4 border-t border-border">
-                <Button variant="outline" onClick={() => setIsCreateClientOpen(false)}>
-                  Cancel
-                </Button>
-                <Button className="bg-primary hover:bg-primary-dark text-primary-foreground">Register Client</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
@@ -539,10 +453,7 @@ export default function UserManagement() {
             <Users className="h-4 w-4" />
             Employees ({employees.length})
           </TabsTrigger>
-          <TabsTrigger value="clients" className="flex items-center gap-2">
-            <Building className="h-4 w-4" />
-            Clients
-          </TabsTrigger>
+          
         </TabsList>
 
         <TabsContent value="employees" className="space-y-6">
@@ -657,6 +568,10 @@ export default function UserManagement() {
               <CardTitle className="flex items-center gap-2 text-foreground">
                 <Building className="h-5 w-5" />
                 Business Clients
+                <Badge className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 ml-2">
+                  <Database className="h-3 w-3 mr-1" />
+                  PostgreSQL Database
+                </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -680,54 +595,6 @@ export default function UserManagement() {
                 </Select>
               </div>
 
-              <div className="space-y-4">
-                {clients.map((client) => (
-                  <div key={client.id} className="border border-border rounded-lg p-4 hover:bg-muted/30">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center">
-                          <Building className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground">{client.businessName}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {client.contactName} • {client.email}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {client.locations} location{client.locations > 1 ? "s" : ""} • Joined{" "}
-                            {new Date(client.joinDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-primary">{client.gcsgScore}</div>
-                          <div className="text-xs text-muted-foreground">GCSG Score</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-semibold text-foreground">{client.monthlyReviews}</div>
-                          <div className="text-xs text-muted-foreground">Reviews/month</div>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Badge
-                            className={
-                              securityLevels.find((s) => s.value === client.securityLevel)?.color ||
-                              "bg-gray-50 dark:bg-gray-950/20 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800"
-                            }
-                          >
-                            {client.securityLevel === "flagged" && <AlertTriangle className="h-3 w-3 mr-1" />}
-                            {client.securityLevel === "verified" && <Shield className="h-3 w-3 mr-1" />}
-                            {securityLevels.find((s) => s.value === client.securityLevel)?.label}
-                          </Badge>
-                          <Button variant="outline" size="sm">
-                            Manage
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -757,28 +624,8 @@ export default function UserManagement() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Building className="h-5 w-5 text-green-600 dark:text-green-400" />
-              <div>
-                <div className="text-2xl font-bold text-foreground">247</div>
-                <div className="text-sm text-muted-foreground">Active Clients</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <div>
-                <div className="text-2xl font-bold text-foreground">189</div>
-                <div className="text-sm text-muted-foreground">Verified Businesses</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+       
+       
       </div>
     </div>
   )

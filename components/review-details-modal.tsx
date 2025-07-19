@@ -57,6 +57,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/app/providers"
 import { getAuth } from 'firebase/auth'
+import { apiClient } from "@/lib/api-client"
 
 // Type definitions for API responses
 interface SurveyAnswer {
@@ -449,82 +450,22 @@ export function ReviewDetailsModal({
     
     setSaving(true)
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
-      
-      // Add Firebase auth token
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (currentUser) {
-        const token = await currentUser.getIdToken()
-        headers['Authorization'] = `Bearer ${token}`
-        
-        // DEBUGGING: Check the token claims
-        const tokenResult = await currentUser.getIdTokenResult()
-        console.log('🔑 Current user token claims:', tokenResult.claims)
-        console.log('🔑 User email:', currentUser.email)
-        console.log('🔑 User role from providers:', role)
-      }
-
-      console.log('💾 Saving privacy status:', {
+      console.log('💾 Saving privacy status via apiClient:', {
         reviewId: reviewDetails.id,
         currentPrivacy: reviewDetails.isPrivate,
         newPrivacy: tempPrivacyStatus,
         userRole: role,
         userEmail: user?.email
       })
-
-      // FIXED: Send the correct request body format
-      const requestBody = {
-        consumerReviewId: parseInt(reviewDetails.id), // Ensure it's a number
-        isPrivate: tempPrivacyStatus
-      }
-
-      console.log('📤 Request body:', requestBody)
-
-      const response = await fetch(`/api/gcloud-proxy/review/consumerReview/update`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(requestBody)
-      })
-
-      console.log('📡 Privacy update response status:', response.status)
-
-      // IMPROVED: Better error handling with detailed logging
-      if (!response.ok) {
-        const responseText = await response.text()
-        console.error('❌ Privacy update failed:', {
-          status: response.status,
-          statusText: response.statusText,
-          responseBody: responseText
-        })
-
-        let errorMessage = 'Failed to update privacy status'
-        
-        try {
-          const errorData = JSON.parse(responseText)
-          errorMessage = errorData.error || errorMessage
-          console.error('❌ Parsed error:', errorData)
-        } catch (parseError) {
-          console.error('❌ Could not parse error response:', responseText)
-        }
-
-        // Show specific error messages to help debug
-        if (response.status === 403) {
-          errorMessage = `Access denied. Your role (${role}) may not have permission to edit reviews. Please contact an administrator.`
-        } else if (response.status === 401) {
-          errorMessage = 'Authentication failed. Please refresh the page and try again.'
-        } else if (response.status === 404) {
-          errorMessage = 'Review not found or you do not have permission to edit it.'
-        }
-
-        throw new Error(errorMessage)
-      }
-
-      const responseData = await response.json()
-      console.log('✅ Privacy update successful:', responseData)
-
+  
+      // FIXED: Use apiClient method instead of manual fetch
+      const response = await apiClient.updateReviewPrivacy(
+        parseInt(reviewDetails.id), 
+        tempPrivacyStatus
+      )
+  
+      console.log('✅ Privacy update successful via apiClient:', response)
+  
       // Update local state
       setReviewDetails(prev => prev ? { ...prev, isPrivate: tempPrivacyStatus } : null)
       
@@ -532,7 +473,7 @@ export function ReviewDetailsModal({
       if (onReviewUpdated) {
         onReviewUpdated()
       }
-
+  
       console.log('✅ Privacy status updated successfully')
       
     } catch (error) {

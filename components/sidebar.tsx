@@ -25,7 +25,7 @@ import { useState, useEffect } from "react"
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { role, user } = useAuth()
+  const { role, clientRole, user } = useAuth()
   const [hasClientAccess, setHasClientAccess] = useState(false)
 
   // Check client access for GladGrade employees
@@ -75,24 +75,23 @@ export function Sidebar() {
 
   // Define menu items with role-based access
   const navigationItems = [
+    // === UNIVERSAL SECTIONS (Everyone) ===
     {
       name: "Dashboard",
       href: "/dashboard",
       icon: LayoutDashboard,
       roles: ["super_admin", "admin", "client", "employee", "moderator"],
+      clientRoles: ["client_admin", "client_moderator", "client_user", "client_viewer"],
     },
+    
+    // === GLADGRADE EMPLOYEE ONLY SECTIONS ===
     {
       name: "Sales",
       href: "/dashboard/sales",
       icon: TrendingUp,
       roles: ["super_admin", "admin", "employee"],
       requiresSalesAccess: true,
-    },
-    {
-      name: "Reviews",
-      href: "/dashboard/reviews",
-      icon: MessageSquare,
-      roles: ["super_admin", "admin", "client", "employee", "moderator"],
+      employeeOnly: true,
     },
     {
       name: "Clients",
@@ -100,54 +99,85 @@ export function Sidebar() {
       icon: Building,
       roles: ["super_admin", "admin", "employee"],
       requiresClientAccess: true,
-    },
-    {
-      name: "Reports",
-      href: "/dashboard/reports",
-      icon: BarChart3,
-      roles: ["super_admin", "admin"],
+      employeeOnly: true,
     },
     {
       name: "Partners",
       href: "/dashboard/partners",
       icon: Heart,
       roles: ["super_admin", "admin"],
+      employeeOnly: true,
     },
     {
       name: "Content Moderation",
       href: "/dashboard/moderation",
       icon: ImageIcon,
       roles: ["super_admin", "admin", "moderator"],
-    },
-    {
-      name: "User Management",
-      href: "/dashboard/users",
-      icon: ShieldCheck,
-      roles: ["super_admin", "admin"],
+      employeeOnly: true,
     },
     {
       name: "System Admin",
       href: "/dashboard/system",
       icon: Database,
       roles: ["super_admin"],
+      employeeOnly: true,
+    },
+    {
+      name: "User Management",
+      href: "/dashboard/users",
+      icon: ShieldCheck,
+      roles: ["super_admin", "admin"],
+      employeeOnly: true,
     },
     {
       name: "Settings",
       href: "/dashboard/settings",
       icon: Settings,
       roles: ["super_admin", "admin"],
+      employeeOnly: true,
     },
+    
+    // === SHARED SECTIONS (Both employees and clients) ===
+    {
+      name: "Reviews",
+      href: "/dashboard/reviews",
+      icon: MessageSquare,
+      roles: ["super_admin", "admin", "client", "employee", "moderator"],
+      clientRoles: ["client_admin", "client_moderator", "client_user", "client_viewer"],
+    },
+    
+    // === CLIENT-SPECIFIC SECTIONS ===
+    {
+      name: "Reports",
+      href: "/dashboard/reports",
+      icon: BarChart3,
+      roles: ["super_admin", "admin", "client"],
+      clientRoles: ["client_admin", "client_user"], // client_moderator and client_viewer excluded
+      clientOnly: true,
+    },
+    {
+      name: "Team Management",
+      href: "/dashboard/team",
+      icon: Users,
+      roles: ["client"],
+      clientRoles: ["client_admin"], // Only client admins can manage team
+      clientOnly: true,
+    },
+    
+    // === UNIVERSAL SECTIONS (Everyone) ===
     {
       name: "Help & Support",
       href: "/dashboard/support",
       icon: HelpCircle,
       roles: ["super_admin", "admin", "client", "employee", "moderator"],
+      clientRoles: ["client_admin", "client_moderator", "client_user", "client_viewer"],
     },
     {
       name: "Profile",
       href: "/dashboard/profile",
       icon: User,
       roles: ["super_admin", "admin", "client", "employee", "moderator"],
+      clientRoles: ["client_admin", "client_moderator", "client_user", "client_viewer"],
     },
   ]
 
@@ -158,7 +188,24 @@ export function Sidebar() {
       return false
     }
 
-    // Check special access requirements
+    // For client users, check specific client role permissions
+    if (role === "client" && item.clientRoles) {
+      if (!clientRole || !item.clientRoles.includes(clientRole)) {
+        return false
+      }
+    }
+
+    // Skip employee-only sections for clients
+    if (role === "client" && item.employeeOnly) {
+      return false
+    }
+
+    // Skip client-only sections for employees
+    if (role !== "client" && item.clientOnly) {
+      return false
+    }
+
+    // Check special access requirements for employees
     if (item.requiresClientAccess && !hasClientAccess) {
       return false
     }
@@ -174,17 +221,21 @@ export function Sidebar() {
   const getRoleBadgeInfo = () => {
     switch (role) {
       case "super_admin":
-        return { text: "Super Admin", className: "bg-purple-100 text-purple-800" }
+        return { text: "Super Admin", className: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" }
       case "admin":
-        return { text: "Admin", className: "bg-blue-100 text-blue-800" }
+        return { text: "Admin", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" }
       case "employee":
-        return { text: "Employee", className: "bg-green-100 text-green-800" }
+        return { text: "Employee", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" }
       case "moderator":
-        return { text: "Moderator", className: "bg-yellow-100 text-yellow-800" }
+        return { text: "Moderator", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" }
       case "client":
-        return { text: "Client", className: "bg-gray-100 text-gray-800" }
+        // Show specific client role
+        const clientRoleText = clientRole ? 
+          clientRole.replace('client_', '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : 
+          'Client'
+        return { text: clientRoleText, className: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" }
       default:
-        return { text: "User", className: "bg-gray-100 text-gray-800" }
+        return { text: "User", className: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" }
     }
   }
 

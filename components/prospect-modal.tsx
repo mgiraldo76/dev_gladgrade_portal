@@ -2,7 +2,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, MapPin, Star } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAuth } from "@/app/providers"
+import { apiClient } from "@/lib/api-client"
+
 
 interface GooglePlace {
   place_id: string
@@ -227,6 +229,10 @@ export function ProspectModal({ trigger, onProspectCreated }: ProspectModalProps
   const [selectedPlace, setSelectedPlace] = useState<GooglePlace | null>(null)
   const [showSearch, setShowSearch] = useState(true)
 
+
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null)
+  const [locationError, setLocationError] = useState<string>("")
+
   const [formData, setFormData] = useState({
     business_name: "",
     contact_name: "",
@@ -238,23 +244,59 @@ export function ProspectModal({ trigger, onProspectCreated }: ProspectModalProps
     state: "",
     zip_code: "",
     country: "US",
-    formatted_address: "", // Keep for fallback
+    formatted_address: "", 
     website: "",
+    business_type: "", 
     estimated_value: "",
     priority: "medium",
     notes: "",
     place_id: "",
   })
 
+  // Get user's location on component mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      console.log("🌍 Getting user location...")
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords
+          setUserLocation({ lat: latitude, lng: longitude })
+          console.log(`📍 User location: ${latitude}, ${longitude}`)
+        },
+        (error) => {
+          console.warn("⚠️ Geolocation failed:", error.message)
+          setLocationError("Could not get your location. Using default search area.")
+          // Fallback to Miami coordinates
+          setUserLocation({ lat: 25.7617, lng: -80.1918 })
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // Cache for 5 minutes
+        }
+      )
+    } else {
+      console.warn("⚠️ Geolocation not supported")
+      setLocationError("Location services not available. Using default search area.")
+      setUserLocation({ lat: 25.7617, lng: -80.1918 })
+    }
+  }, [])
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
+    if (!userLocation) {
+      alert("Please wait while we detect your location...")
+      return
+    }
 
     setSearchLoading(true)
     try {
-      const response = await fetch(
-        `/api/clients/search-places?query=${encodeURIComponent(searchQuery)}&location=Miami, FL`,
-      )
-      const data = await response.json()
+      console.log("🔍 Searching places via apiClient with user location...")
+      
+      // Pass user's coordinates as location parameter
+      const locationString = `${userLocation.lat},${userLocation.lng}`
+      const data = await apiClient.searchPlaces(searchQuery, locationString)
+      console.log("✅ Places search results:", data)
 
       if (data.success) {
         setSearchResults(data.data || [])
@@ -313,6 +355,7 @@ export function ProspectModal({ trigger, onProspectCreated }: ProspectModalProps
       country: "US",
       formatted_address: "",
       website: "",
+      business_type: "", 
       estimated_value: "",
       priority: "medium",
       notes: "",
@@ -326,44 +369,58 @@ export function ProspectModal({ trigger, onProspectCreated }: ProspectModalProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // ✅ UPDATED: Only business_name is required
+    console.log("🔍 Form data before validation:", formData)
+    
+    if (!formData.business_name?.trim()) {
+      alert("Business name is required")
+      return
+    }
+    
     setLoading(true)
 
     try {
       // Format postal code before submission
       const formattedZip = formatPostalCode(formData.zip_code, formData.country)
       
-      // Include authentication headers
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      // Add authentication headers
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      console.log("🔍 Creating prospect with authentication headers:", headers)
+      console.log("🔍 Creating prospect via apiClient...")
       
-      const response = await fetch("/api/sales/prospects", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          ...formData,
-          zip_code: formattedZip,
-          // Send both for API compatibility
-          address: formData.formatted_address || `${formData.street_address}, ${formData.city}, ${formData.state} ${formattedZip}`,
-        }),
-      })
-
-      if (response.ok) {
-        setOpen(false)
-        resetForm()
-        onProspectCreated?.()
-      } else {
-        console.error("Failed to create prospect")
+      // ✅ SIMPLIFIED: Only require business_name, everything else optional
+      const prospectData = {
+        business_name: formData.business_name.trim(),
+        contact_name: formData.contact_name?.trim() || "",
+        contact_email: formData.contact_email?.trim() || "",
+        phone: formData.phone?.trim() || "",
+        website: formData.website?.trim() || "",
+        // Individual address components
+        street_address: formData.street_address?.trim() || "",
+        city: formData.city?.trim() || "",
+        state: formData.state || "",
+        zip_code: formattedZip || "",
+        country: formData.country || "US",
+        formatted_address: formData.formatted_address || `${formData.street_address}, ${formData.city}, ${formData.state} ${formattedZip}`,
+        business_type: formData.business_type?.trim() || "",
+        estimated_value: Number.parseFloat(formData.estimated_value) || 0,
+        priority: formData.priority || "medium",
+        notes: formData.notes?.trim() || "",
+        place_id: formData.place_id || "",
+        lead_source: 'manual'
       }
+      
+      console.log("🎯 Prospect data being sent:", prospectData)
+      
+      const result = await apiClient.createProspect(prospectData)
+      console.log("✅ Prospect created successfully:", result)
+
+      setOpen(false)
+      resetForm()
+      onProspectCreated?.()
+      
     } catch (error) {
-      console.error("Error creating prospect:", error)
+      console.error("❌ Error creating prospect:", error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      alert("Error creating prospect: " + errorMessage)
     } finally {
       setLoading(false)
     }
@@ -478,7 +535,7 @@ export function ProspectModal({ trigger, onProspectCreated }: ProspectModalProps
               </Card>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+<div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="business_name" className="text-foreground">Business Name *</Label>
                 <Input
@@ -495,6 +552,7 @@ export function ProspectModal({ trigger, onProspectCreated }: ProspectModalProps
                   id="contact_name"
                   value={formData.contact_name}
                   onChange={(e) => handleInputChange("contact_name", e.target.value)}
+                  placeholder="Optional - can be added later"
                   className="bg-background text-foreground border-border"
                 />
               </div>
@@ -508,6 +566,7 @@ export function ProspectModal({ trigger, onProspectCreated }: ProspectModalProps
                   type="email"
                   value={formData.contact_email}
                   onChange={(e) => handleInputChange("contact_email", e.target.value)}
+                  placeholder="Optional - can be added later"
                   className="bg-background text-foreground border-border"
                 />
               </div>
@@ -516,7 +575,8 @@ export function ProspectModal({ trigger, onProspectCreated }: ProspectModalProps
                 <Input 
                   id="phone" 
                   value={formData.phone} 
-                  onChange={(e) => handleInputChange("phone", e.target.value)} 
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  placeholder="Optional"
                   className="bg-background text-foreground border-border"
                 />
               </div>

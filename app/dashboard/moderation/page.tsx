@@ -1,4 +1,6 @@
 // File: app/dashboard/moderation/page.tsx
+// MINIMAL CHANGES - Only add auth headers to existing fetch calls
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -34,6 +36,7 @@ import {
   Shield,
   Tag,
 } from "lucide-react"
+import { getAuth } from "firebase/auth" // ADDED: Import Firebase auth
 
 interface ModerationItem {
   content_type: string
@@ -68,6 +71,55 @@ interface ModerationStats {
 interface MessageCategory {
   id: number
   name: string
+}
+
+// ADDED: Helper function to get auth headers
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  const auth = getAuth()
+  const user = auth.currentUser
+  
+  if (user) {
+    try {
+      const token = await user.getIdToken()
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    } catch (error) {
+      console.error("❌ Error getting auth token:", error)
+    }
+  }
+  
+  return {
+    'Content-Type': 'application/json'
+  }
+}
+
+// ADDED: Helper function to make authenticated requests to Google Cloud Run
+const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://gladgrade-api-360532994710.us-east4.run.app"
+  const url = `${baseUrl}/api${endpoint}`
+  
+  const headers = await getAuthHeaders()
+  
+  const config: RequestInit = {
+    headers: {
+      ...headers,
+      ...options.headers,
+    },
+    ...options,
+  }
+  
+  console.log(`🌐 API Request: ${options.method || "GET"} ${url}`)
+  
+  const response = await fetch(url, config)
+  const data = await response.json()
+  
+  if (!response.ok) {
+    throw new Error(data.error || `HTTP error! status: ${response.status}`)
+  }
+  
+  return data
 }
 
 // Simple Checkbox Component
@@ -167,8 +219,8 @@ export default function ContentModerationPage() {
         params.append("search", searchTerm)
       }
 
-      const response = await fetch(`/api/moderation?${params}`)
-      const result = await response.json()
+      // CHANGED: Use apiRequest helper instead of direct fetch
+      const result = await apiRequest(`/moderation?${params}`)
 
       if (result.success) {
         setItems(result.data || [])
@@ -185,8 +237,8 @@ export default function ContentModerationPage() {
 
   const loadModerationStats = async () => {
     try {
-      const response = await fetch("/api/moderation/stats")
-      const result = await response.json()
+      // CHANGED: Use apiRequest helper instead of direct fetch
+      const result = await apiRequest("/moderation/stats")
 
       if (result.success) {
         setStats(result.data)
@@ -199,8 +251,8 @@ export default function ContentModerationPage() {
 
   const loadMessageCategories = async () => {
     try {
-      const response = await fetch("/api/moderation/message-categories")
-      const result = await response.json()
+      // CHANGED: Use apiRequest helper instead of direct fetch
+      const result = await apiRequest("/moderation/message-categories")
 
       if (result.success) {
         setMessageCategories(result.data || [])
@@ -268,11 +320,9 @@ export default function ContentModerationPage() {
         ]
       }
 
-      const response = await fetch("/api/moderation", {
+      // CHANGED: Use apiRequest helper instead of direct fetch
+      const result = await apiRequest("/moderation", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           items: itemsToModerate,
           action: selectedAction,
@@ -280,8 +330,6 @@ export default function ContentModerationPage() {
           moderator_id: 1, // TODO: Get actual employee ID from auth
         }),
       })
-
-      const result = await response.json()
 
       if (result.success) {
         setIsModerationDialogOpen(false)

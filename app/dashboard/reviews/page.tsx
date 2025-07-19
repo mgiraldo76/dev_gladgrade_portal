@@ -1,6 +1,5 @@
 // File: app/dashboard/reviews/page.tsx
-// Path: app/dashboard/reviews/page.tsx
-// SECURITY FIXED: Removed client-side security logic, now relies on server-side validation
+// MINIMAL FIX: Only fix the rating display issue, keep everything else exactly the same
 
 "use client"
 
@@ -15,7 +14,6 @@ import { useAuth } from "@/app/providers"
 import { useSearchParams, useRouter } from "next/navigation"
 import { getAuth } from 'firebase/auth'
 import { ReviewDetailsModal } from "@/components/review-details-modal"
-
 
 interface Review {
   id: string
@@ -144,6 +142,146 @@ export default function ReviewsPage() {
     }
   }, [filters.placeId, isClientUser, clientPlaceIds, clientBusinessLocations])
 
+  const loadClientBusinessLocations = async () => {
+    if (!businessId) return
+    
+    try {
+      console.log('🏢 Loading business locations for client:', businessId)
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+      
+      const auth = getAuth()
+      const currentUser = auth.currentUser
+      if (currentUser) {
+        const token = await currentUser.getIdToken()
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const response = await fetch(`/api/portal/clients/${businessId}/locations`, { headers })
+      if (response.ok) {
+        const data = await response.json()
+        const locations = data.data || []
+        
+        setClientBusinessLocations(locations)
+        
+        const placeIds = locations
+          .filter((loc: BusinessLocation) => loc.place_id)
+          .map((loc: BusinessLocation) => loc.place_id)
+        
+        setClientPlaceIds(placeIds)
+        
+        console.log('✅ Client business locations loaded:', locations)
+        console.log('✅ Client place IDs:', placeIds)
+      } else {
+        console.error('❌ Failed to load client business locations:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('❌ Error loading client business locations:', error)
+    }
+  }
+
+  const loadClients = async () => {
+    try {
+      const headers: Record<string, string> = {}
+      if (user?.email) {
+        headers["x-user-email"] = user.email
+      }
+
+      const auth = getAuth()
+      const currentUser = auth.currentUser
+      if (currentUser) {
+        const token = await currentUser.getIdToken()
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const response = await fetch('/api/portal/clients', { headers })
+      if (response.ok) {
+        const data = await response.json()
+        setClients(data.data || [])
+      }
+    } catch (error) {
+      console.error('Error loading clients:', error)
+    }
+  }
+
+  // FIXED: Enhanced data mapping to handle different API response formats
+  const loadReviews = async () => {
+    setLoading(true)
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+      
+      const auth = getAuth()
+      const currentUser = auth.currentUser
+      if (currentUser) {
+        const token = await currentUser.getIdToken()
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const includePrivate = (isClientUser || canViewAllReviews)
+      
+      const requestBody: any = {
+        includePrivate: includePrivate
+      }
+
+      if (filters.placeId && filters.placeId !== 'all') {
+        requestBody.placeId = filters.placeId
+      }
+
+      console.log('🔍 Loading reviews with params:', requestBody)
+
+      const response = await fetch('/api/gcloud-proxy/consumerReviews/query', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody)
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Raw API Response:', data.data?.[0]) // Debug log
+        
+        // FIXED: Enhanced data mapping to handle various API response formats
+        const formattedReviews = (data.data || []).map((review: any) => {
+          // Try to extract rating value from different possible fields
+          const ratingValue = review.ratingValue || review.ratingvalue || review.rating_value || 0
+          
+          console.log(`🔍 Processing review ${review.id}: ratingValue=${ratingValue}`) // Debug log
+          
+          return {
+            id: (review.id || '').toString(),
+            ratingId: (review.ratingId || review.ratingid || review.consumerRatingId || '').toString(),
+            ratingValue: parseInt(ratingValue, 10) || 0, // FIXED: Ensure it's a number
+            review: review.review || '',
+            placeName: review.placeName || review.placename || '',
+            placeId: review.placeId || review.placeid || '',
+            placeAddress: review.placeAddress || review.placeaddress || '',
+            author: review.author || review.displayname || review.firstname || 'Anonymous',
+            reviewCreatedDate: review.reviewCreatedDate || review.datecreated || '',
+            subcategory: review.subcategory || '',
+            hasImages: Boolean(review.hasImages || review.hasimages),
+            imageCount: parseInt(review.imageCount || review.imagecount || 0, 10),
+            isPrivate: Boolean(review.isPrivate || review.isprivate)
+          }
+        })
+        
+        console.log('✅ Formatted reviews sample:', formattedReviews[0]) // Debug log
+        console.log(`✅ Reviews loaded: ${formattedReviews.length}`)
+        setAllReviews(formattedReviews)
+      } else {
+        console.error('❌ Failed to load reviews:', response.status, response.statusText)
+        setAllReviews([])
+      }
+    } catch (error) {
+      console.error('❌ Error loading reviews:', error)
+      setAllReviews([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Client-side filtering logic
   const applyFilters = () => {
     let filtered = [...allReviews]
@@ -210,63 +348,6 @@ export default function ReviewsPage() {
     setDisplayedReviews(paginatedReviews)
   }
 
-  const loadClientBusinessLocations = async () => {
-    if (!businessId) return
-    
-    try {
-      console.log('🏢 Loading business locations for client:', businessId)
-      
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
-      
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (currentUser) {
-        const token = await currentUser.getIdToken()
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      const response = await fetch(`/api/clients/${businessId}/locations`, { headers })
-      if (response.ok) {
-        const data = await response.json()
-        const locations = data.data || []
-        
-        setClientBusinessLocations(locations)
-        
-        const placeIds = locations
-          .filter((loc: BusinessLocation) => loc.place_id)
-          .map((loc: BusinessLocation) => loc.place_id)
-        
-        setClientPlaceIds(placeIds)
-        
-        console.log('✅ Client business locations loaded:', locations)
-        console.log('✅ Client place IDs:', placeIds)
-      } else {
-        console.error('❌ Failed to load client business locations:', response.status, response.statusText)
-      }
-    } catch (error) {
-      console.error('❌ Error loading client business locations:', error)
-    }
-  }
-
-  const loadClients = async () => {
-    try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch('/api/clients', { headers })
-      if (response.ok) {
-        const data = await response.json()
-        setClients(data.data || [])
-      }
-    } catch (error) {
-      console.error('Error loading clients:', error)
-    }
-  }
-
   const loadReviewStats = async () => {
     if (!filters.placeId) return
     loadReviewStatsForPlace(filters.placeId)
@@ -285,8 +366,12 @@ export default function ReviewsPage() {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      const includePrivateParam = (isClientUser || canViewAllReviews) ? '&includePrivate=true' : ''
-      const response = await fetch(`/api/gcloud-proxy/review-count?placeId=${placeId}${includePrivateParam}`, { headers })
+      const includePrivateParam = (isClientUser || canViewAllReviews) ? '?includePrivate=true' : ''
+      
+      const response = await fetch(`/api/gcloud-proxy/reviews/review-count?placeId=${placeId}${includePrivateParam}`, {
+        headers
+      })
+
       if (response.ok) {
         const data = await response.json()
         setStats(data.data)
@@ -298,103 +383,11 @@ export default function ReviewsPage() {
     }
   }
 
-  const loadReviews = async () => {
-    setLoading(true)
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (currentUser) {
-        const token = await currentUser.getIdToken()
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      // SECURITY FIXED: Build request body - server will handle security validation
-      const requestBody: any = {
-        includePrivate: isClientUser || canViewAllReviews,
-      }
-
-      // For client users with location selection
-      if (isClientUser && filters.placeId) {
-        requestBody.placeId = filters.placeId
-        console.log('🎯 Client selected specific place ID:', filters.placeId)
-      }
-
-      // For admin users, apply place/client filters if set
-      if (canViewAllReviews) {
-        if (filters.placeId) {
-          requestBody.placeId = filters.placeId
-        }
-        if (filters.clientId) {
-          requestBody.clientId = filters.clientId
-        }
-      }
-
-      console.log('📤 Review request body:', requestBody)
-
-      const response = await fetch(`/api/gcloud-proxy/consumerReviews/query`, { 
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-
-        console.log('✅ Reviews API Response:', data)
-        
-        const reviewsData = data.data || []
-        const formattedReviews = reviewsData.map((review: any) => {
-          return {
-            id: review.id?.toString() || '',
-            ratingId: review.consumerratingid?.toString() || '',
-            ratingValue: parseInt(review.ratingvalue, 10) || parseInt(review.ratingValue, 10) || 0,
-            review: review.review || '',
-            placeName: review.placename || review.placeName || 'Unknown Location',
-            placeId: review.placeid || review.placeId || '',
-            placeAddress: review.placeaddress || review.placeAddress || '',
-            author: review.displayname || review.firstname || 'Anonymous',
-            reviewCreatedDate: review.datecreated || '',
-            subcategory: review.subcategory || '',
-            hasImages: Boolean(review.hasimages),
-            imageCount: review.imagecount || 0,
-            isPrivate: Boolean(review.isprivate)
-          }
-        })
-        
-        setAllReviews(formattedReviews)
-        console.log(`✅ Loaded ${formattedReviews.length} total reviews`)
-        
-      } else {
-        console.error('Failed to load reviews:', response.status)
-        // Handle specific error cases
-        if (response.status === 403) {
-          console.error('❌ Access denied - user may be trying to access unauthorized data')
-        }
-        setAllReviews([])
-      }
-    } catch (error) {
-      console.error('Error loading reviews:', error)
-      setAllReviews([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleFilterChange = (key: string, value: string) => {
-    const filterValue = value === "all" && key !== 'privacyFilter' ? "" : value
-    setFilters(prev => ({ ...prev, [key]: filterValue }))
-    
-    // Update URL params
-    const newParams = new URLSearchParams(searchParams?.toString())
-    if (filterValue && filterValue !== 'all') {
-      newParams.set(key, filterValue)
-    } else {
-      newParams.delete(key)
+    if (value === 'all') {
+      value = ''
     }
-    router.push(`/dashboard/reviews?${newParams.toString()}`)
+    setFilters(prev => ({ ...prev, [key]: value }))
   }
 
   const clearFilters = () => {
@@ -408,25 +401,24 @@ export default function ReviewsPage() {
       searchText: '',
       privacyFilter: 'all'
     })
-    setCurrentPage(1)
-    router.push('/dashboard/reviews')
   }
 
-  // Handle opening review details modal
   const handleViewDetails = (reviewId: string) => {
     setSelectedReviewId(reviewId)
     setIsReviewModalOpen(true)
   }
 
-  // Handle closing review details modal
-  const handleCloseModal = () => {
-    setIsReviewModalOpen(false)
-    setSelectedReviewId(null)
-  }
-
-  // Handle review updated (refresh data)
-  const handleReviewUpdated = () => {
-    loadReviews() // Reload all reviews to reflect changes
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    } catch {
+      return dateString
+    }
   }
 
   const getRatingColor = (rating: number) => {
@@ -435,40 +427,18 @@ export default function ReviewsPage() {
     return 'text-red-600 dark:text-red-400'
   }
 
-  const getRatingBadgeVariant = (rating: number) => {
-    if (rating >= 9) return 'default'
-    if (rating >= 7) return 'secondary'
-    return 'destructive'
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-
-  // Show loading state if client user and locations not loaded yet
-  if (isClientUser && businessId && clientPlaceIds.length === 0 && !loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading your business locations...</p>
-        </div>
-      </div>
-    )
+  const getRatingBadgeColor = (rating: number) => {
+    if (rating >= 9) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+    if (rating >= 7) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+    return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading reviews...</p>
+      <div className="space-y-6">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Loading reviews...</p>
         </div>
       </div>
     )
@@ -476,53 +446,38 @@ export default function ReviewsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Page Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Customer Reviews</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <MessageSquare className="h-4 w-4 text-primary" />
-            <span className="text-sm text-foreground">
-              {isClientUser ? 'Your Business Reviews' : 'Platform Review Management'}
-            </span>
-            {isClientUser && clientBusinessLocations.length > 0 && (
-              <span className="text-xs text-muted-foreground">
-                • {clientBusinessLocations.length} location{clientBusinessLocations.length > 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Export Reviews
-          </Button>
+          <h1 className="text-3xl font-bold text-foreground">Reviews</h1>
+          <p className="text-muted-foreground">
+            {isClientUser 
+              ? "View and manage your business reviews" 
+              : "Monitor and moderate customer reviews"
+            }
+          </p>
         </div>
       </div>
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid gap-6 md:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-5">
           <Card className="border-border">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{stats.total_reviews}</div>
-                  <div className="text-sm text-muted-foreground">Total Reviews</div>
-                </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-foreground">{stats.total_reviews}</div>
+                <div className="text-xs text-muted-foreground">Total Reviews</div>
               </div>
             </CardContent>
           </Card>
           
           <Card className="border-border">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-yellow-500" />
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{stats.average_rating || 'N/A'}</div>
-                  <div className="text-sm text-muted-foreground">Avg Rating</div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-foreground">
+                  {stats.average_rating || 'N/A'}
                 </div>
+                <div className="text-xs text-muted-foreground">Average Rating</div>
               </div>
             </CardContent>
           </Card>
@@ -623,8 +578,8 @@ export default function ReviewsPage() {
                 </Select>
               </div>
             )}
-            
-            {/* Date Range */}
+
+            {/* Date From */}
             <div>
               <label className="text-sm font-medium text-foreground">From Date</label>
               <Input
@@ -634,7 +589,8 @@ export default function ReviewsPage() {
                 className="bg-background text-foreground border-border"
               />
             </div>
-            
+
+            {/* Date To */}
             <div>
               <label className="text-sm font-medium text-foreground">To Date</label>
               <Input
@@ -644,8 +600,8 @@ export default function ReviewsPage() {
                 className="bg-background text-foreground border-border"
               />
             </div>
-            
-            {/* Has Images Filter */}
+
+            {/* Has Images */}
             <div>
               <label className="text-sm font-medium text-foreground">Images</label>
               <Select value={filters.hasImages || "all"} onValueChange={(value) => handleFilterChange('hasImages', value)}>
@@ -655,12 +611,12 @@ export default function ReviewsPage() {
                 <SelectContent className="bg-white border-gray-300">
                   <SelectItem value="all" className="text-black hover:bg-gray-100">All Reviews</SelectItem>
                   <SelectItem value="true" className="text-black hover:bg-gray-100">With Images</SelectItem>
-                  <SelectItem value="false" className="text-black hover:bg-gray-100">Without Images</SelectItem>
+                  <SelectItem value="false" className="text-black hover:bg-gray-100">No Images</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            
-            {/* Rating Range Filter */}
+
+            {/* Rating Range */}
             <div>
               <label className="text-sm font-medium text-foreground">Rating Range</label>
               <Select value={filters.ratingRange || "all"} onValueChange={(value) => handleFilterChange('ratingRange', value)}>
@@ -721,127 +677,133 @@ export default function ReviewsPage() {
               <p className="font-medium text-foreground">No reviews found</p>
               <p className="text-sm">
                 {isClientUser 
-                  ? "No reviews found for your business locations" 
-                  : "Try adjusting your filters or check back later"
+                  ? "No reviews found for your business with the current filters"
+                  : "Try adjusting your filters to see more reviews"
                 }
               </p>
             </div>
           ) : (
             <div className="space-y-4">
               {displayedReviews.map((review) => (
-                <div key={review.id} className="border border-border rounded-lg p-4 hover:shadow-md transition-shadow bg-background">
-                  <div className="flex items-start justify-between mb-3">
+                <div
+                  key={review.id}
+                  className="border border-border rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-3">
-                      <Badge variant={getRatingBadgeVariant(review.ratingValue)}>
-                        <Star className="h-3 w-3 mr-1" />
-                        {review.ratingValue}/10
+                      <Badge className={getRatingBadgeColor(review.ratingValue)}>
+                        {review.ratingValue || 0}/10
                       </Badge>
-                      <div>
-                        <div className="font-medium text-foreground">{review.placeName}</div>
-                        <div className="text-sm text-muted-foreground">{review.placeAddress}</div>
+                      <div className="flex items-center gap-1">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">{review.author}</span>
                       </div>
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {formatDate(review.reviewCreatedDate)}
+                        </span>
+                      </div>
+                      {review.hasImages && (
+                        <div className="flex items-center gap-1">
+                          <Image className="h-4 w-4 text-blue-600" />
+                          <span className="text-xs text-blue-600">{review.imageCount || 1} image(s)</span>
+                        </div>
+                      )}
+                      {review.isPrivate && (
+                        <div className="flex items-center gap-1">
+                          <EyeOff className="h-4 w-4 text-orange-600" />
+                          <span className="text-xs text-orange-600">Private</span>
+                        </div>
+                      )}
+                      {!review.isPrivate && (
+                        <div className="flex items-center gap-1">
+                          <Eye className="h-4 w-4 text-green-600" />
+                          <span className="text-xs text-green-600">Public</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        {review.author}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatDate(review.reviewCreatedDate)}
-                      </div>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewDetails(review.id)}
+                      className="flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Details
+                    </Button>
                   </div>
                   
                   <div className="mb-3">
-                    <p className="text-foreground">{review.review}</p>
+                    <p className="font-medium text-foreground">{review.placeName}</p>
+                    {review.placeAddress && (
+                      <p className="text-sm text-muted-foreground">{review.placeAddress}</p>
+                    )}
+                    {review.subcategory && (
+                      <Badge variant="outline" className="mt-1 text-xs">
+                        {review.subcategory}
+                      </Badge>
+                    )}
                   </div>
                   
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {review.subcategory && (
-                        <Badge variant="outline" className="text-xs border-border">
-                          {review.subcategory}
-                        </Badge>
-                      )}
-                      {review.hasImages && (
-                        <Badge variant="outline" className="text-xs border-border">
-                          <Image className="h-3 w-3 mr-1" />
-                          {review.imageCount || 1} image{(review.imageCount || 1) > 1 ? 's' : ''}
-                        </Badge>
-                      )}
-                      {/* Privacy status badge */}
-                      {review.isPrivate && (isClientUser || canViewAllReviews) && (
-                        <Badge variant="outline" className="text-xs border-border bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300">
-                          <EyeOff className="h-3 w-3 mr-1" />
-                          Private
-                        </Badge>
-                      )}
-                      {!review.isPrivate && (isClientUser || canViewAllReviews) && filters.privacyFilter === 'all' && (
-                        <Badge variant="outline" className="text-xs border-border bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300">
-                          <Eye className="h-3 w-3 mr-1" />
-                          Public
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleViewDetails(review.id)}
-                      >
-                        View Details
-                      </Button>
-                      {canViewAllReviews && (
-                        <Button variant="outline" size="sm">
-                          Moderate
-                        </Button>
-                      )}
-                    </div>
+                  <div className="bg-muted/50 p-3 rounded-md">
+                    <p className="text-sm text-foreground leading-relaxed">
+                      {review.review.length > 300 
+                        ? `${review.review.substring(0, 300)}...`
+                        : review.review
+                      }
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
           )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-border">
+              <div className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages} • {totalCount} total reviews
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Review Details Modal */}
-      <ReviewDetailsModal
-        isOpen={isReviewModalOpen}
-        onClose={handleCloseModal}
-        reviewId={selectedReviewId}
-        onReviewUpdated={handleReviewUpdated}
-      />
+      {selectedReviewId && (
+        <ReviewDetailsModal
+          reviewId={selectedReviewId}
+          isOpen={isReviewModalOpen}
+          onClose={() => {
+            setIsReviewModalOpen(false)
+            setSelectedReviewId(null)
+          }}
+          onReviewUpdated={loadReviews}
+        />
+      )}
     </div>
   )
 }

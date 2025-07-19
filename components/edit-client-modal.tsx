@@ -22,6 +22,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar, Phone, Mail, MapPin, Globe, User, Building, Users, Plus, Search, Star, Trash2, Edit, Key } from "lucide-react"
 import { useAuth } from "@/app/providers"
+import { apiClient } from "@/lib/api-client" 
+
+
 
 interface EditClientModalProps {
   isOpen: boolean
@@ -217,7 +220,23 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     activity_type: "call",
     subject: "",
     description: "",
+    outcome: "",
+    next_action: "",
+    priority: "medium", 
+    scheduled_for: "",
   })
+
+  const resetActivityForm = () => {
+    setNewActivity({  // Changed from setActivityData to setNewActivity
+      activity_type: "call",
+      subject: "",
+      description: "",
+      outcome: "",
+      next_action: "",
+      priority: "medium",
+      scheduled_for: "",
+    })
+  }
 
   // Enhanced: Client form data with security_level
   const [formData, setFormData] = useState({
@@ -267,6 +286,17 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     new_password: "",
   })
 
+  /*const [activityData, setActivityData] = useState({
+    activity_type: "call",
+    subject: "",
+    description: "",
+    outcome: "",
+    next_action: "",
+    priority: "medium",
+    scheduled_for: "",
+  })*/
+
+
   // Initialize form data and load business locations
   useEffect(() => {
     if (client) {
@@ -294,61 +324,57 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
 
   const loadBusinessSectors = async () => {
     try {
-      const response = await fetch("/api/business-sectors")
-      if (response.ok) {
-        const data = await response.json()
-        setBusinessSectors(data.data || [])
-      }
+      const data = await apiClient.getIndustryCategories()
+      setBusinessSectors(data.data || [])
     } catch (error) {
-      console.error("Error loading business sectors:", error)
+      console.error("Error loading industry categories:", error)
     }
   }
 
   const loadSalesReps = async () => {
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-      
-      const response = await fetch("/api/employees", { headers })
-      if (response.ok) {
-        const data = await response.json()
-        const salesTeam = data.data.filter((emp: any) => 
-          emp.department_name === "Sales" || 
-          ["CEO", "CCO", "Sales Manager"].includes(emp.role)
-        )
-        setSalesReps(salesTeam)
-      }
+      const data = await apiClient.getEmployees()
+      const salesTeam = data.data.filter((emp: any) => 
+        emp.department_name === "Sales" || 
+        ["CEO", "CCO", "Sales Manager"].includes(emp.role)
+      )
+      setSalesReps(salesTeam)
     } catch (error) {
       console.error("Error loading sales reps:", error)
     }
   }
 
-  const loadClientUsers = async () => {
-    if (!client?.id) return
 
+  // 5. LOCATIONS - Replace handleDeleteLocation function
+  const handleDeleteLocation = async (locationId: number) => {
+    if (!confirm("Are you sure you want to delete this location?")) {
+      return
+    }
+
+    try {
+      console.log("🔍 Deleting location:", locationId)
+      await apiClient.deleteClientLocation(client.id, locationId)
+      console.log("✅ Location deleted successfully")
+      
+      loadBusinessLocations()
+      alert("Location deleted successfully!")
+    } catch (error) {
+      console.error("❌ Error deleting location:", error)
+      alert("Error deleting location")
+    }
+  }
+
+  // 6. USERS - Replace loadClientUsers function
+  const loadClientUsers = async () => {
     setLoadingUsers(true)
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      console.log(`🔍 Loading users for client ${client.id}`)
-      const response = await fetch(`/api/clients/${client.id}/users`, { headers })
-      
-      if (response.ok) {
-        const data = await response.json()
-        console.log(`✅ Loaded ${data.data?.length || 0} users:`, data.data)
-        setClientUsers(data.data || [])
-      } else {
-        console.error("❌ Failed to load users:", response.status, response.statusText)
-        const errorData = await response.json().catch(() => ({}))
-        console.error("Error details:", errorData)
-      }
+      console.log("🔍 Loading users for client", client.id)
+      const response = await apiClient.getClientUsers(client.id)
+      setClientUsers(response.data || [])
+      console.log("✅ Loaded users:", response.data)
     } catch (error) {
-      console.error("❌ Error loading client users:", error)
+      console.error("❌ Error loading users:", error)
+      setClientUsers([])
     } finally {
       setLoadingUsers(false)
     }
@@ -356,21 +382,16 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
 
   const loadClientActivities = async () => {
     if (!client?.id) return
-
+  
     setLoadingActivities(true)
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch(`/api/clients/${client.id}/activities`, { headers })
-      if (response.ok) {
-        const data = await response.json()
-        setActivities(data.data || [])
-      }
+      // Note: This endpoint might not exist yet in apiClient
+      // For now, we'll set empty array and handle gracefully
+      console.log(`🔍 Loading activities for client ${client.id}`)
+      setActivities([]) // Temporary until we add the endpoint to apiClient
     } catch (error) {
       console.error("Error loading client activities:", error)
+      setActivities([])
     } finally {
       setLoadingActivities(false)
     }
@@ -382,39 +403,32 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
       alert("Please enter a subject for the activity")
       return
     }
-
+  
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      console.log("🔍 Adding activity with headers:", headers)
-
-      const response = await fetch(`/api/clients/${client.id}/activities`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          client_id: client.id,
-          ...newActivity,
-        }),
+      console.log("🔍 Creating activity:", newActivity)
+      
+      const response = await apiClient.createClientActivity(client.id, {
+        activity_type: newActivity.activity_type,
+        subject: newActivity.subject.trim(),
+        description: newActivity.description?.trim() || "",
+        outcome: newActivity.outcome?.trim() || "",
+        next_action: newActivity.next_action?.trim() || "",
+        priority: newActivity.priority,
+        scheduled_for: newActivity.scheduled_for || "",
       })
-
-      if (response.ok) {
-        setNewActivity({ activity_type: "call", subject: "", description: "" })
-        loadClientActivities() // Reload activities
-        alert("Activity added successfully!")
-      } else {
-        const errorData = await response.json()
-        console.error("Failed to add activity:", errorData)
-        alert(`Failed to add activity: ${errorData.error}`)
-      }
+  
+      console.log("✅ Activity created successfully:", response)
+      
+      // Reset form  
+      resetActivityForm()
+      
+      // Reload activities
+      loadActivities()
+      
+      alert("Activity created successfully!")
     } catch (error) {
-      console.error("Error adding activity:", error)
-      alert("Error adding activity")
+      console.error("❌ Error creating activity:", error)
+      alert("Error creating activity")
     }
   }
 
@@ -436,39 +450,148 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     }
   }
 
-  const loadBusinessLocations = async () => {
-    if (!client?.id) return
 
+  // 1. ACTIVITIES - Replace loadActivities function
+  const loadActivities = async () => {
+    setLoadingActivities(true)
+    try {
+      console.log("🔍 Loading activities for client", client.id)
+      const response = await apiClient.getClientActivities(client.id)
+      setActivities(response.data || [])
+      console.log("✅ Loaded activities:", response.data)
+    } catch (error) {
+      console.error("❌ Error loading activities:", error)
+      setActivities([])
+    } finally {
+      setLoadingActivities(false)
+    }
+  }
+  
+
+  // 2. ACTIVITIES - Replace handleActivitySubmit function  
+  const handleActivitySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!newActivity.subject.trim()) {  // Changed from activityData to newActivity
+      alert("Subject is required")
+      return
+    }
+  
+    try {
+      console.log("🔍 Creating activity:", newActivity)
+      
+      const response = await apiClient.createClientActivity(client.id, {
+        activity_type: newActivity.activity_type,
+        subject: newActivity.subject.trim(),
+        description: newActivity.description?.trim() || "",
+        outcome: newActivity.outcome?.trim() || "",
+        next_action: newActivity.next_action?.trim() || "",
+        priority: newActivity.priority,
+        scheduled_for: newActivity.scheduled_for || "",
+      })
+  
+      console.log("✅ Activity created successfully:", response)
+      
+      // Reset form
+      resetActivityForm()
+      
+      // Reload activities
+      loadActivities()
+      
+      alert("Activity created successfully!")
+    } catch (error) {
+      console.error("❌ Error creating activity:", error)
+      alert("Error creating activity")
+    }
+  }
+
+  const handleActivityChange = (field: string, value: string) => {
+    setNewActivity((prev) => ({ ...prev, [field]: value }))  // Changed from setActivityData to setNewActivity
+  }
+
+  const loadBusinessLocations = async () => {
     setLoadingLocations(true)
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch(`/api/clients/${client.id}/locations`, { headers })
-      if (response.ok) {
-        const data = await response.json()
-        setBusinessLocations(data.data || [])
-      }
+      console.log("🔍 Loading locations for client", client.id)
+      const response = await apiClient.getClientLocations(client.id)
+      setBusinessLocations(response.data || [])
+      console.log("✅ Loaded locations:", response.data)
     } catch (error) {
-      console.error("Error loading business locations:", error)
+      console.error("❌ Error loading locations:", error)
+      setBusinessLocations([])
     } finally {
       setLoadingLocations(false)
+    }
+  }
+
+
+  // 4. LOCATIONS - Replace handleLocationSubmit function
+  const handleLocationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!locationData.location_name.trim() || !locationData.address.trim()) {
+      alert("Location name and address are required")
+      return
+    }
+
+    try {
+      if (selectedLocation) {
+        // UPDATE existing location
+        console.log("🔍 Updating location:", locationData)
+        
+        const updateData = {
+          location_name: locationData.location_name.trim(),
+          address: locationData.address.trim(),
+          city: locationData.city?.trim() || "",
+          state: locationData.state?.trim() || "",
+          postal_code: locationData.postal_code?.trim() || "",
+          country: locationData.country || "USA",
+          phone: locationData.phone?.trim() || "",
+          manager_name: locationData.manager_name?.trim() || "",
+          manager_email: locationData.manager_email?.trim() || "",
+          is_primary: locationData.is_primary || false,
+          place_id: locationData.place_id || "",
+        }
+
+        const response = await apiClient.updateClientLocation(client.id, selectedLocation.id, updateData)
+        console.log("✅ Location updated successfully:", response)
+        alert("Location updated successfully!")
+      } else {
+        // CREATE new location
+        console.log("🔍 Creating location:", locationData)
+        
+        const createData = {
+          location_name: locationData.location_name.trim(),
+          address: locationData.address.trim(),
+          place_id: selectedPlace?.place_id || locationData.place_id || "",
+          is_primary: locationData.is_primary || false,
+          phone: locationData.phone?.trim() || "",
+          manager_name: locationData.manager_name?.trim() || "",
+          operating_hours: "", // Add if you have this field
+        }
+
+        const response = await apiClient.createClientLocation(client.id, createData)
+        console.log("✅ Location created successfully:", response)
+        alert("Location created successfully!")
+      }
+
+      // Reset form and reload
+      resetLocationForm()
+      setIsLocationModalOpen(false)
+      loadBusinessLocations()
+    } catch (error) {
+      console.error("❌ Error saving location:", error)
+      alert("Error saving location")
     }
   }
 
   // Google Places search for locations
   const handleLocationSearch = async () => {
     if (!locationSearchQuery.trim()) return
-
+  
     setSearchLoading(true)
     try {
-      const response = await fetch(
-        `/api/clients/search-places?query=${encodeURIComponent(locationSearchQuery)}&location=Miami, FL`,
-      )
-      const data = await response.json()
-
+      const data = await apiClient.searchPlaces(locationSearchQuery, "Miami, FL")
       if (data.success) {
         setLocationSearchResults(data.data || [])
       } else {
@@ -522,33 +645,15 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
 
   const handleLocationSave = async () => {
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const endpoint = selectedLocation 
-        ? `/api/clients/${client.id}/locations/${selectedLocation.id}`
-        : `/api/clients/${client.id}/locations`
-
-      const method = selectedLocation ? "PUT" : "POST"
-
-      const response = await fetch(endpoint, {
-        method,
-        headers,
-        body: JSON.stringify(locationData),
-      })
-
-      if (response.ok) {
+      if (selectedLocation) {
+        // Update existing location - need to add this method to apiClient
+        alert("Update location functionality not yet implemented")
+      } else {
+        // Create new location
+        await apiClient.createClientLocation(client.id, locationData)
         loadBusinessLocations()
         setIsLocationModalOpen(false)
         resetLocationForm()
-      } else {
-        const errorData = await response.json()
-        alert(`Failed to save location: ${errorData.error}`)
       }
     } catch (error) {
       console.error("Error saving location:", error)
@@ -618,137 +723,94 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
     setIsEditUserModalOpen(true)
   }
 
+  
+  // 7. USERS - Replace handleSaveEditUser function
   const handleSaveEditUser = async () => {
     if (!editUser.email.trim() || !editUser.full_name.trim()) {
       alert("Email and full name are required")
       return
     }
-
+  
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
       const updateData: any = {
         email: editUser.email.trim(),
         full_name: editUser.full_name.trim(),
         role: editUser.role,
         status: editUser.status,
       }
-
-      if (editUser.reset_password) {
+  
+      const hasNewPassword = editUser.new_password && editUser.new_password.trim()
+      const forceReset = editUser.reset_password
+  
+      if (hasNewPassword || forceReset) {
         updateData.reset_password = true
       }
-
-      if (editUser.new_password && editUser.new_password.trim()) {
+  
+      if (hasNewPassword) {
         updateData.new_password = editUser.new_password.trim()
       }
-
+  
       console.log("🔍 Updating user with data:", {
         ...updateData,
         new_password: updateData.new_password ? '[REDACTED]' : undefined
       })
-
-      const response = await fetch(`/api/clients/${client.id}/users/${selectedEditUser.id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(updateData),
-      })
-
-      if (response.ok) {
-        const responseData = await response.json()
-        console.log("✅ User updated successfully:", responseData)
-        
-        loadClientUsers() // Reload users list
-        setIsEditUserModalOpen(false)
-        resetEditUserForm()
-        
-        alert("User updated successfully!")
-      } else {
-        const errorData = await response.json()
-        console.error("❌ Failed to update user:", errorData)
-        
-        // Show enhanced error message for email conflicts
-        if (errorData.errorCode === 'EMAIL_EXISTS') {
-          alert(errorData.error)
-        } else {
-          alert(`Failed to update user: ${errorData.error}`)
-        }
-      }
+  
+      const response = await apiClient.updateClientUser(client.id, selectedEditUser.id, updateData)
+  
+      console.log("✅ User updated successfully:", response)
+      
+      loadClientUsers()
+      setIsEditUserModalOpen(false)
+      resetEditUserForm()
+      
+      alert("User updated successfully!")
     } catch (error) {
       console.error("❌ Error updating user:", error)
       alert("Error updating user")
     }
   }
 
+  // 8. USERS - Replace handleDeleteUser function
   const handleDeleteUser = async (clientUser: any) => {
-    if (!confirm(`Are you sure you want to deactivate ${clientUser.full_name || clientUser.user_name}? This will disable their access to the client portal.`)) {
+    if (!confirm(`Are you sure you want to deactivate ${clientUser.full_name || clientUser.user_name}?`)) {
       return
     }
 
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch(`/api/clients/${client.id}/users/${clientUser.id}`, {
-        method: "DELETE",
-        headers,
-      })
-
-      if (response.ok) {
-        loadClientUsers() // Reload users list
-        alert("User deactivated successfully!")
-      } else {
-        const errorData = await response.json()
-        alert(`Failed to deactivate user: ${errorData.error}`)
-      }
+      console.log("🔍 Deactivating user:", clientUser.id)
+      await apiClient.deleteClientUser(client.id, clientUser.id)
+      console.log("✅ User deactivated successfully")
+      
+      loadClientUsers()
+      alert("User deactivated successfully!")
     } catch (error) {
-      console.error("Error deactivating user:", error)
+      console.error("❌ Error deactivating user:", error)
       alert("Error deactivating user")
     }
   }
 
-  // NEW: Reactivate user function
+
+  // 9. USERS - Replace handleReactivateUser function
   const handleReactivateUser = async (clientUser: any) => {
-    if (!confirm(`Are you sure you want to reactivate ${clientUser.full_name || clientUser.user_name}? This will restore their access to the client portal.`)) {
+    if (!confirm(`Are you sure you want to reactivate ${clientUser.full_name || clientUser.user_name}?`)) {
       return
     }
 
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const response = await fetch(`/api/clients/${client.id}/users/${clientUser.id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({
-          email: clientUser.email,
-          full_name: clientUser.full_name,
-          role: clientUser.role,
-          status: "active",
-        }),
+      console.log("🔍 Reactivating user:", clientUser.id)
+      
+      const response = await apiClient.updateClientUser(client.id, clientUser.id, {
+        email: clientUser.email,
+        full_name: clientUser.full_name,
+        role: clientUser.role,
+        status: "active",
       })
-
-      if (response.ok) {
-        loadClientUsers() // Reload users list
-        alert("User reactivated successfully!")
-      } else {
-        const errorData = await response.json()
-        alert(`Failed to reactivate user: ${errorData.error}`)
-      }
+      
+      console.log("✅ User reactivated successfully:", response)
+      loadClientUsers()
+      alert("User reactivated successfully!")
     } catch (error) {
-      console.error("Error reactivating user:", error)
+      console.error("❌ Error reactivating user:", error)
       alert("Error reactivating user")
     }
   }
@@ -776,20 +838,8 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
+  
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const selectedSector = businessSectors.find((sector: any) => 
-        sector.businesssectorname === formData.business_type
-      )
-
       const updateData = {
         business_name: formData.business_name,
         contact_name: formData.contact_name,
@@ -798,22 +848,22 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
         website: formData.website,
         business_type: formData.business_type,
         claim_status: formData.claim_status,
-        security_level: formData.security_level, // NEW: Include security level
+        security_level: formData.security_level,
         sales_rep_id: formData.sales_rep_id && formData.sales_rep_id !== "unassigned" ? parseInt(formData.sales_rep_id) : null,
       }
-
-      const response = await fetch(`/api/clients/${client.id}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(updateData),
-      })
-
-      if (response.ok) {
+  
+      console.log("🔄 Updating client with:", updateData)
+      
+      const result = await apiClient.updateClient(client.id, updateData)
+      
+      if (result.success) {
+        console.log("✅ Client updated successfully:", result)
+        alert("Client updated successfully!")
         onSuccess()
         onClose()
       } else {
-        const errorData = await response.json()
-        alert(`Failed to update client: ${errorData.error}`)
+        console.error("❌ Failed to update client:", result)
+        alert(`Failed to update client: ${result.error}`)
       }
     } catch (error) {
       console.error("Error updating client:", error)
@@ -829,42 +879,27 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
       alert("Please fill in all required fields")
       return
     }
-
+  
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
       console.log("🔍 Creating user with data:", {
         email: newUser.user_email,
         full_name: newUser.user_name,
         role: newUser.user_role,
         client_id: client.id,
-        // Don't log password for security
       })
-
-      const response = await fetch(`/api/clients/${client.id}/users`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          email: newUser.user_email.trim(),
-          full_name: newUser.user_name.trim(),
-          role: newUser.user_role,
-          temporary_password: newUser.temporary_password.trim(),
-          client_id: client.id,
-          send_welcome_email: true,
-          create_firebase_account: true,
-        }),
-      })
-
-      const responseData = await response.json()
-      console.log("🔍 API Response:", responseData)
-
-      if (response.ok) {
+  
+      const userData = {
+        email: newUser.user_email.trim(),
+        full_name: newUser.user_name.trim(),
+        role: newUser.user_role,
+        temporary_password: newUser.temporary_password.trim(),
+        create_firebase_account: true,
+      }
+  
+      const responseData = await apiClient.createClientUser(client.id, userData)
+      console.log("✅ API Response:", responseData)
+  
+      if (responseData.success) {
         // Add a small delay to ensure database transaction is complete
         setTimeout(() => {
           loadClientUsers()
@@ -877,16 +912,10 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
           user_role: "client_admin",
           temporary_password: "",
         })
-        alert(`User created successfully! Temporary password: ${responseData.data.temporary_password}`)
+        alert(`User created successfully! ${responseData.message}`)
       } else {
         console.error("❌ API Error:", responseData)
-        
-        // Show enhanced error message for email conflicts
-        if (responseData.errorCode === 'EMAIL_EXISTS') {
-          alert(responseData.error)
-        } else {
-          alert(`Failed to create user: ${responseData.error || 'Unknown error'}`)
-        }
+        alert(`Failed to create user: ${responseData.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error("❌ Network Error:", error)
@@ -987,13 +1016,13 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                       <SelectValue placeholder="Select industry" />
                     </SelectTrigger>
                     <SelectContent>
-                      {businessSectors
-                        .filter((sector: any) => sector.id && sector.businesssectorname)
-                        .map((sector: any) => (
-                          <SelectItem key={sector.id} value={sector.businesssectorname}>
-                            {sector.businesssectorname}
-                          </SelectItem>
-                        ))}
+                    {businessSectors
+                      .filter((sector: any) => sector.id && sector.name)
+                      .map((sector: any) => (
+                        <SelectItem key={sector.id} value={sector.name}>
+                          {sector.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1366,7 +1395,10 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                       }}>
                         Cancel
                       </Button>
-                      <Button onClick={handleLocationSave}>
+                      <Button onClick={(e) => {
+                        e.preventDefault()
+                        handleLocationSubmit(e)
+                      }}>
                         {selectedLocation ? "Update Location" : "Add Location"}
                       </Button>
                     </DialogFooter>
@@ -1675,8 +1707,9 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
             </Dialog>
           </TabsContent>
 
+          
           <TabsContent value="activities" className="space-y-4">
-            {/* Add New Activity Section - Identical to prospect modal */}
+            {/* Add New Activity Section */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -1685,89 +1718,154 @@ export function EditClientModal({ isOpen, onClose, client, onSuccess, userRole }
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="activity_type">Activity Type</Label>
-                    <Select
-                      value={newActivity.activity_type}
-                      onValueChange={(value) => setNewActivity((prev) => ({ ...prev, activity_type: value }))}
-                    >
-                      <SelectTrigger  className="bg-background text-foreground border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="call">
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-green-500" />
-                            Phone Call
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="email">
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-blue-500" />
-                            Email
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="meeting">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-purple-500" />
-                            Meeting
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="note">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-gray-500" />
-                            Note
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="follow_up">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-yellow-500" />
-                            Follow Up
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="support">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-blue-500" />
-                            Support
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                <form onSubmit={handleActivitySubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="activity_type">Activity Type</Label>
+                      <Select
+                        value={newActivity.activity_type}
+                        onValueChange={(value) => handleActivityChange("activity_type", value)}
+                      >
+                        <SelectTrigger className="bg-background text-foreground border-border">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="call">
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-green-500" />
+                              Phone Call
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="email">
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-blue-500" />
+                              Email
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="meeting">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-purple-500" />
+                              Meeting
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="note">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-gray-500" />
+                              Note
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="follow_up">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-yellow-500" />
+                              Follow Up
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="support">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-blue-500" />
+                              Support
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="proposal">Proposal</SelectItem>
+                          <SelectItem value="contract">Contract</SelectItem>
+                          <SelectItem value="payment">Payment</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="priority">Priority</Label>
+                      <Select 
+                        value={newActivity.priority} 
+                        onValueChange={(value) => handleActivityChange("priority", value)}
+                      >
+                        <SelectTrigger className="bg-background text-foreground border-border">
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="subject">Subject *</Label>
                     <Input
                       id="subject"
                       value={newActivity.subject}
-                      onChange={(e) => setNewActivity((prev) => ({ ...prev, subject: e.target.value }))}
+                      onChange={(e) => handleActivityChange("subject", e.target.value)}
                       placeholder="Brief description of activity"
                       required
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={newActivity.description}
-                    onChange={(e) => setNewActivity((prev) => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    placeholder="Detailed notes about the activity, outcome, next steps..."
-                  />
-                </div>
-                <Button 
-                  onClick={handleAddActivity} 
-                  disabled={!newActivity.subject.trim()}
-                  className="w-full"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Add Activity
-                </Button>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={newActivity.description}
+                      onChange={(e) => handleActivityChange("description", e.target.value)}
+                      rows={3}
+                      placeholder="Detailed notes about the activity, outcome, next steps..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="outcome">Outcome</Label>
+                      <Select 
+                        value={newActivity.outcome} 
+                        onValueChange={(value) => handleActivityChange("outcome", value)}
+                      >
+                        <SelectTrigger className="bg-background text-foreground border-border">
+                          <SelectValue placeholder="Select outcome" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">No outcome selected</SelectItem>
+                          <SelectItem value="positive">Positive</SelectItem>
+                          <SelectItem value="neutral">Neutral</SelectItem>
+                          <SelectItem value="negative">Negative</SelectItem>
+                          <SelectItem value="no_response">No Response</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="pending">Pending</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="scheduled_for">Scheduled For</Label>
+                      <Input
+                        id="scheduled_for"
+                        type="datetime-local"
+                        value={newActivity.scheduled_for}
+                        onChange={(e) => handleActivityChange("scheduled_for", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="next_action">Next Action</Label>
+                    <Input
+                      id="next_action"
+                      value={newActivity.next_action}
+                      onChange={(e) => handleActivityChange("next_action", e.target.value)}
+                      placeholder="What should be done next?"
+                    />
+                  </div>
+
+                  <Button type="submit" disabled={!newActivity.subject.trim()} className="w-full">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Add Activity
+                  </Button>
+                </form>
               </CardContent>
             </Card>
 
-            {/* Activities List - Identical to prospect modal */}
+            {/* Activities List */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">
