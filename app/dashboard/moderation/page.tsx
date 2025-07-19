@@ -74,7 +74,7 @@ interface MessageCategory {
 }
 
 // ADDED: Helper function to get auth headers
-const getAuthHeaders = async () => {
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
   const auth = getAuth()
   const user = auth.currentUser
   
