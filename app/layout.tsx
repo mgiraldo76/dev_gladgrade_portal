@@ -10,7 +10,9 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "GladGrade Portal",
   description: "Business management portal for GladGrade services",
-    generator: 'v0.dev'
+  icons: {
+    icon: '/images/gladgrade-favicon.png',
+  },
 }
 
 export default function RootLayout({
