@@ -323,36 +323,23 @@ export function ReviewDetailsModal({
     console.log('📥 loadReviewDetails called with reviewId:', reviewId)
     setLoading(true)
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
       
-      // Add Firebase auth token
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (currentUser) {
-        const token = await currentUser.getIdToken()
-        headers['Authorization'] = `Bearer ${token}`
-      }
 
       console.log('🔍 Loading review details for reviewId:', reviewId)
 
       // Load review by review ID
-      const reviewResponse = await fetch(`/api/gcloud-proxy/consumerReviews/query`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          reviewIds: [reviewId],
-          includePrivate: true
-        })
+      // Load review by review ID using ApiClient
+      const reviewResponse = await apiClient.queryReviews({
+        reviewIds: [reviewId],
+        includePrivate: true
       })
 
-      if (!reviewResponse.ok) {
-        console.error('Review API response not OK:', reviewResponse.status)
+      if (!reviewResponse.data) {
+        console.error('Review API response has no data')
         throw new Error('Failed to load review details')
       }
 
-      const reviewData = await reviewResponse.json()
+      const reviewData = reviewResponse
       console.log('📋 Review API Response:', reviewData)
       
       const review = reviewData.data?.[0]
@@ -367,12 +354,9 @@ export function ReviewDetailsModal({
       // Load images for this review
       let images = []
       try {
-        const imagesResponse = await fetch(`/api/gcloud-proxy/reviews/all-images/${review.id}`, {
-          headers
-        })
-        if (imagesResponse.ok) {
-          const imagesData = await imagesResponse.json()
-          images = imagesData.data || []
+        const imagesResponse = await apiClient.getReviewImages(review.id)
+        if (imagesResponse.data) {
+          images = imagesResponse.data || []
           console.log('🖼️ Loaded images:', images)
         }
       } catch (error) {
@@ -380,18 +364,15 @@ export function ReviewDetailsModal({
       }
 
       // FIXED: Enhanced survey data loading with question text lookup
+      // Load survey answers using ApiClient
       let surveyAnswers = []
       try {
         console.log('📊 Loading survey answers for reviewId:', reviewId)
         
-        const surveyResponse = await fetch(`/api/gcloud-proxy/reviews/survey-answers/${reviewId}`, {
-          method: 'GET',
-          headers
-        })
+        const surveyResponse = await apiClient.getReviewSurveyAnswers(reviewId)
         
-        if (surveyResponse.ok) {
-          const surveyData = await surveyResponse.json()
-          surveyAnswers = (surveyData.data || []).map((answer: SurveyAnswer) => ({
+        if (surveyResponse.data) {
+          surveyAnswers = (surveyResponse.data || []).map((answer: any) => ({
             id: answer.id?.toString() || '',
             question: answer.question || 'Question text not available',
             answer: answer.answer || '',
@@ -401,7 +382,7 @@ export function ReviewDetailsModal({
           console.log(`✅ Loaded ${surveyAnswers.length} survey answers with questions`)
           console.log('📊 Survey answers:', surveyAnswers)
         } else {
-          console.warn('Failed to fetch survey answers:', surveyResponse.status)
+          console.warn('No survey data in response')
         }
       } catch (error) {
         console.warn('Could not load survey answers:', error)

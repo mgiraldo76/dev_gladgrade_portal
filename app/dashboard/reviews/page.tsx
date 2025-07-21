@@ -13,6 +13,7 @@ import { Calendar, Star, User, MessageSquare, Image, Filter, ChevronLeft, Chevro
 import { useAuth } from "@/app/providers"
 import { useSearchParams, useRouter } from "next/navigation"
 import { getAuth } from 'firebase/auth'
+import { apiClient } from "@/lib/api-client"
 import { ReviewDetailsModal } from "@/components/review-details-modal"
 
 interface Review {
@@ -148,21 +149,9 @@ export default function ReviewsPage() {
     try {
       console.log('🏢 Loading business locations for client:', businessId)
       
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
-      
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (currentUser) {
-        const token = await currentUser.getIdToken()
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      const response = await fetch(`/api/portal/clients/${businessId}/locations`, { headers })
-      if (response.ok) {
-        const data = await response.json()
-        const locations = data.data || []
+      const response = await apiClient.getClientBusinessLocations(businessId)
+      if (response.success) {
+        const locations = response.data || []
         
         setClientBusinessLocations(locations)
         
@@ -175,7 +164,7 @@ export default function ReviewsPage() {
         console.log('✅ Client business locations loaded:', locations)
         console.log('✅ Client place IDs:', placeIds)
       } else {
-        console.error('❌ Failed to load client business locations:', response.status, response.statusText)
+        console.error('❌ Failed to load client business locations:', response.error)
       }
     } catch (error) {
       console.error('❌ Error loading client business locations:', error)
@@ -184,25 +173,17 @@ export default function ReviewsPage() {
 
   const loadClients = async () => {
     try {
-      const headers: Record<string, string> = {}
-      if (user?.email) {
-        headers["x-user-email"] = user.email
-      }
-
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (currentUser) {
-        const token = await currentUser.getIdToken()
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      const response = await fetch('/api/portal/clients', { headers })
-      if (response.ok) {
-        const data = await response.json()
-        setClients(data.data || [])
+      console.log('📊 Loading business clients...')
+      
+      const response = await apiClient.getClients()
+      if (response.success) {
+        setClients(response.data || [])
+        console.log('✅ Clients loaded:', response.data?.length || 0)
+      } else {
+        console.error('❌ Failed to load clients:', response.error)
       }
     } catch (error) {
-      console.error('Error loading clients:', error)
+      console.error('❌ Error loading clients:', error)
     }
   }
 
@@ -210,41 +191,27 @@ export default function ReviewsPage() {
   const loadReviews = async () => {
     setLoading(true)
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
-      
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (currentUser) {
-        const token = await currentUser.getIdToken()
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
+      console.log('🔍 Loading reviews...')
+  
       const includePrivate = (isClientUser || canViewAllReviews)
       
-      const requestBody: any = {
+      const requestParams: any = {
         includePrivate: includePrivate
       }
-
+  
       if (filters.placeId && filters.placeId !== 'all') {
-        requestBody.placeId = filters.placeId
+        requestParams.placeId = filters.placeId
       }
-
-      console.log('🔍 Loading reviews with params:', requestBody)
-
-      const response = await fetch('/api/gcloud-proxy/consumerReviews/query', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log('✅ Raw API Response:', data.data?.[0]) // Debug log
+  
+      console.log('🔍 Loading reviews with params:', requestParams)
+  
+      const response = await apiClient.queryReviews(requestParams)
+      
+      if (response.data) {
+        console.log('✅ Raw API Response:', response.data?.[0]) // Debug log
         
         // FIXED: Enhanced data mapping to handle various API response formats
-        const formattedReviews = (data.data || []).map((review: any) => {
+        const formattedReviews = (response.data || []).map((review: any) => {
           // Try to extract rating value from different possible fields
           const ratingValue = review.ratingValue || review.ratingvalue || review.rating_value || 0
           
@@ -271,7 +238,7 @@ export default function ReviewsPage() {
         console.log(`✅ Reviews loaded: ${formattedReviews.length}`)
         setAllReviews(formattedReviews)
       } else {
-        console.error('❌ Failed to load reviews:', response.status, response.statusText)
+        console.error('❌ Failed to load reviews:', response.error)
         setAllReviews([])
       }
     } catch (error) {
@@ -356,28 +323,18 @@ export default function ReviewsPage() {
   const loadReviewStatsForPlace = async (placeId: string) => {
     setLoadingStats(true)
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      }
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-      if (currentUser) {
-        const token = await currentUser.getIdToken()
-        headers['Authorization'] = `Bearer ${token}`
-      }
-
-      const includePrivateParam = (isClientUser || canViewAllReviews) ? '?includePrivate=true' : ''
+      console.log('📊 Loading review stats for place:', placeId)
       
-      const response = await fetch(`/api/gcloud-proxy/reviews/review-count?placeId=${placeId}${includePrivateParam}`, {
-        headers
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data.data)
+      const response = await apiClient.getReviewCount({ placeId })
+      
+      if (response.success) {
+        setStats(response.data)
+        console.log('✅ Review stats loaded:', response.data)
+      } else {
+        console.error('❌ Failed to load review stats:', response.error)
       }
     } catch (error) {
-      console.error('Error loading review stats:', error)
+      console.error('❌ Error loading review stats:', error)
     } finally {
       setLoadingStats(false)
     }

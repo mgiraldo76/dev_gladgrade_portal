@@ -13,6 +13,8 @@ interface ReviewQueryParams {
   hasImages?: string
   ratingRange?: string
   search?: string
+  reviewIds?: string[]
+  includePrivate?: boolean
 }
 
 interface ReviewCountParams {
@@ -419,6 +421,10 @@ class ApiClient {
     })
   }
 
+  async getClientBusinessLocations(businessId: number) {
+    return this.request(`/portal/clients/${businessId}/locations`)
+  }
+
   // ===== REVIEW API METHODS (these use gcRequest, now FIXED for Firebase hosting) =====
 
   // Get review count for a single place
@@ -445,7 +451,8 @@ class ApiClient {
 
   // Get images for a specific review
   async getReviewImages(reviewId: string) {
-    return this.gcRequest(`/reviews/images/${reviewId}`)
+    //return this.gcRequest(`/reviews/images/${reviewId}`)
+    return this.gcRequest(`/reviews/all-images/${reviewId}`)
   }
 
   // Moderate a review (admin only)
@@ -470,6 +477,12 @@ class ApiClient {
       })
     })
   }
+
+  // Get survey answers for a specific review
+  async getReviewSurveyAnswers(reviewId: string) {
+    return this.gcRequest(`/reviews/survey-answers/${reviewId}`)
+  }
+
 
   async updateProspect(prospectId: number, prospect: {
     business_name?: string

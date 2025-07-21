@@ -1,5 +1,5 @@
 #!/bin/bash
-# chmod +x deploy-devportalgladgradecom.sh
+# chmod +x ./scripts/bash/deploy-devportalgladgradecom.sh
 
 
 # GladGrade Portal - Deploy to Dev Portal
