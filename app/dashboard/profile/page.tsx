@@ -1,5 +1,6 @@
 // File: app/dashboard/profile/page.tsx
-// Enhanced Profile Page with QR Code Generation for Business Clients
+// Path: /dashboard/profile
+// Enhanced Profile Page with QR Options for Business Clients
 
 "use client"
 
@@ -13,6 +14,8 @@ import { useAuth } from "@/app/providers"
 import { User, Shield, Mail, Calendar, Crown, Building, Settings, QrCode } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { QRCodeModal } from "@/components/qr-code-modal"
+import { QRActions } from "@/components/qr-actions"
+import { apiClient } from "@/lib/api-client"
 
 export default function ProfilePage() {
   const { user, role, businessId } = useAuth()
@@ -35,58 +38,64 @@ export default function ProfilePage() {
     try {
       console.log(`📊 Loading business data for client ${businessId}`)
       
-      const response = await fetch(`/api/clients/${businessId}`)
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setBusinessData(result.data)
-          console.log("✅ Business data loaded:", result.data.business_name)
+      // Use the same endpoint that works in other parts of the app
+      const result = await apiClient.getClients()
+      if (result.success) {
+        // Find the specific client from the list
+        const clientData = result.data.find((client: any) => client.id === businessId)
+        if (clientData) {
+          setBusinessData({
+            business_name: clientData.business_name,
+            business_address: clientData.business_address || clientData.contact_address,
+            id: businessId
+          })
+          console.log("✅ Business data loaded:", clientData.business_name)
+        } else {
+          console.error("❌ Client not found in results")
         }
       }
     } catch (error) {
-      console.error("❌ Error loading business data:", error)
+      console.error("Failed to load business profile:", error)
     } finally {
       setLoadingBusiness(false)
     }
   }
 
   const handleShowQRCode = () => {
-    if (businessId && businessData) {
-      setQrModalOpen(true)
-    }
+    setQrModalOpen(true)
   }
 
-  const getRoleInfo = (userRole: string | null) => {
-    switch (userRole) {
+  const getRoleInfo = (role: string | null) => {
+    switch (role) {
       case "super_admin":
         return {
           name: "Super Administrator",
           description: "Full system access and control",
           color: "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800",
           icon: Crown,
-          permissions: ["Full System Access", "User Management", "System Administration", "Database Control"],
+          permissions: ["Complete System Control", "User Management", "Security Management", "Data Access"],
         }
       case "admin":
         return {
           name: "Administrator",
-          description: "GladGrade employee with admin privileges",
+          description: "Administrative privileges",
           color: "bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800",
           icon: Shield,
-          permissions: ["User Management", "Content Moderation", "Reports", "Settings"],
+          permissions: ["User Management", "Content Moderation", "Advanced Reports", "Settings Management"],
         }
       case "moderator":
         return {
-          name: "Moderator",
-          description: "Content moderation and review management",
-          color: "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800",
+          name: "Content Moderator",
+          description: "Content review and moderation",
+          color: "bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800",
           icon: Shield,
-          permissions: ["Content Moderation", "Review Management", "Image Approval"],
+          permissions: ["Review Management", "Content Moderation", "Image Approval"],
         }
       case "employee":
         return {
           name: "Employee",
-          description: "GladGrade team member",
-          color: "bg-gray-50 dark:bg-gray-950/20 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800",
+          description: "Standard employee access",
+          color: "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800",
           icon: User,
           permissions: ["Customer Support", "Basic Reports", "Review Responses"],
         }
@@ -117,19 +126,6 @@ export default function ProfilePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Profile Settings</h1>
         <div className="flex items-center gap-2">
-          {/* QR Code Button for Business Clients */}
-          {role === "client" && businessId && (
-            <Button 
-              variant="outline" 
-              onClick={handleShowQRCode}
-              disabled={loadingBusiness || !businessData}
-              className="flex items-center gap-2"
-            >
-              <QrCode className="h-4 w-4" />
-              Generate QR Code
-            </Button>
-          )}
-          
           <Button onClick={() => setIsEditing(!isEditing)} className="bg-primary hover:bg-primary-dark text-primary-foreground">
             {isEditing ? "Cancel" : "Edit Profile"}
           </Button>
@@ -153,31 +149,22 @@ export default function ProfilePage() {
               </div>
             ) : businessData ? (
               <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">Business Name</Label>
-                  <div className="text-lg font-semibold text-foreground">{businessData.business_name || "Not specified"}</div>
-                </div>
-                
-                <div>
-                  <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">Industry</Label>
-                  <div className="text-sm text-foreground">{businessData.industry_category_name || "Not specified"}</div>
-                </div>
-                
-                <div className="md:col-span-2">
-                  <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">Business Address</Label>
-                  <div className="text-sm text-foreground">{businessData.business_address || "Not specified"}</div>
-                </div>
-                
-                {businessData.place_id && (
-                  <div className="md:col-span-2">
-                    <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">Google Place ID</Label>
-                    <div className="text-xs font-mono bg-background p-2 rounded border border-border text-foreground">
-                      {businessData.place_id}
-                    </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">Business Name:</Label>
+                    <span className="text-sm text-foreground font-medium">{businessData.business_name}</span>
                   </div>
-                )}
-
-                <div className="md:col-span-2 flex items-center gap-4">
+                  
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">Contact:</Label>
+                    <span className="text-sm text-foreground">{businessData.contact_name || "Not specified"}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">Email:</Label>
+                    <span className="text-sm text-foreground">{businessData.contact_email}</span>
+                  </div>
+                  
                   <div className="flex items-center gap-2">
                     <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">Status:</Label>
                     <Badge variant={businessData.isactive ? "default" : "secondary"}>
@@ -195,24 +182,23 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {/* QR Code Quick Access */}
-                <div className="md:col-span-2 bg-background p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">QR Code</Label>
-                      <div className="text-sm text-muted-foreground">Generate and print QR codes for your business</div>
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={handleShowQRCode}
-                      disabled={loadingBusiness || !businessData}
-                      className="flex items-center gap-2 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                    >
-                      <QrCode className="h-4 w-4" />
-                      Generate QR Code
-                    </Button>
+                {/* QR Options Section */}
+                <div className="bg-background p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <QrCode className="h-5 w-5 text-purple-700 dark:text-purple-300" />
+                    <Label className="text-sm font-medium text-purple-700 dark:text-purple-300">QR Options</Label>
                   </div>
+                  <div className="text-sm text-muted-foreground mb-3">
+                    Generate and manage QR codes for your business
+                  </div>
+                  
+                  <QRActions
+                    businessId={businessId!}
+                    businessName={businessData.business_name}
+                    businessAddress={businessData.business_address}
+                    variant="compact"
+                    className="justify-start"
+                  />
                 </div>
               </div>
             ) : (
@@ -243,66 +229,59 @@ export default function ProfilePage() {
                 <Input
                   id="email"
                   type="email"
-                  value={typeof user === 'string' ? user : user?.email || ""}
+                  value={typeof user === 'string' ? user : user?.email || "demo@gladgrade.com"}
                   disabled={!isEditing}
-                  className="flex-1 bg-background text-foreground border-border"
+                  className="flex-1"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="role" className="text-foreground">Account Role</Label>
+              <Label htmlFor="joinDate" className="text-foreground">Member Since</Label>
               <div className="flex items-center gap-2">
-                <RoleIcon className="h-4 w-4 text-muted-foreground" />
-                <Badge className={`${roleInfo.color} flex-1 justify-center`}>
-                  {roleInfo.name}
-                </Badge>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="joinDate"
+                  value={user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : "Demo Account"}
+                  disabled
+                  className="flex-1"
+                />
               </div>
             </div>
           </div>
 
-          {/* Role Description */}
-          <div className="space-y-2">
-            <Label className="text-foreground">Role Description</Label>
-            <div className="text-sm text-muted-foreground bg-muted p-3 rounded-md border border-border">
-              {roleInfo.description}
-            </div>
-          </div>
-
-          {/* Permissions */}
-          <div className="space-y-2">
-            <Label className="text-foreground">Permissions</Label>
-            <div className="flex flex-wrap gap-2">
-              {roleInfo.permissions.map((permission, index) => (
-                <Badge key={index} variant="outline" className="text-xs border-border">
-                  {permission}
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          {/* Account Information */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-foreground">Account Created</Label>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>{new Date().toLocaleDateString()}</span>
+          {/* Role and Permissions */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <RoleIcon className="h-6 w-6" />
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="font-semibold text-foreground">{roleInfo.name}</h3>
+                  <Badge className={roleInfo.color}>
+                    {role === "super_admin" ? "Super Admin" : role?.replace("_", " ") || "Unknown"}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">{roleInfo.description}</p>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-foreground">Last Login</Label>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>{new Date().toLocaleDateString()}</span>
+            {roleInfo.permissions.length > 0 && (
+              <div className="ml-9">
+                <h4 className="text-sm font-medium text-foreground mb-2">Permissions:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {roleInfo.permissions.map((permission, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {permission}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Preferences Card */}
+      {/* Settings Card */}
       <Card className="border-border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
@@ -313,20 +292,26 @@ export default function ProfilePage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <Label className="text-base text-foreground">Theme</Label>
-              <div className="text-sm text-muted-foreground">Choose your preferred theme</div>
+              <h3 className="font-medium text-foreground">Theme</h3>
+              <p className="text-sm text-muted-foreground">Choose your preferred appearance</p>
             </div>
             <ThemeToggle />
+          </div>
+
+          <div className="pt-4 border-t border-border">
+            <div className="text-sm text-muted-foreground">
+              Additional preference settings will be available in future updates.
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* QR Code Modal */}
-      {businessData && businessId && (
+      {/* Keep existing QR Code Modal for full functionality */}
+      {businessData && (
         <QRCodeModal
           isOpen={qrModalOpen}
           onClose={() => setQrModalOpen(false)}
-          businessId={businessId}
+          businessId={businessId!}
           businessName={businessData.business_name}
           placeId={businessData.place_id}
           businessAddress={businessData.business_address}
