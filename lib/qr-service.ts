@@ -51,7 +51,7 @@ export async function generateBusinessQR(clientId: number, businessName: string)
     console.log(`🏢 Business location ID: ${businessLocationId || 'None'}`)
 
     // Build the new QR URL format
-    const baseUrl = 'https://app.gladgrade.com/placeDetails/'
+    const baseUrl = 'https://app.gladgrade.com/links/placedetails.html'
     const params = new URLSearchParams({
       clientBusinessId: clientId.toString(),
       referral: 'businessQRScan'
@@ -113,7 +113,7 @@ export async function generateMenuQR(clientId: number, businessName: string): Pr
   try {
     console.log(`🍽️ Generating menu QR code for client ${clientId}...`)
 
-    const qrUrl = `https://gladgrade.com/menu/${clientId}`
+    const qrUrl = `https://app.gladgrade.com/links/menu.html?businessId=${clientId}`
     const qrCodeDataURL = await QRCode.toDataURL(qrUrl, {
       width: 300,
       margin: 2,

@@ -2529,3 +2529,30 @@ UNIQUE (client_id, qr_type);
 
 ALTER TABLE client_qr_codes 
 ALTER COLUMN qr_image_path TYPE TEXT;
+
+
+ALTER TABLE business_clients 
+ADD COLUMN IF NOT EXISTS has_items BOOLEAN DEFAULT FALSE;
+
+-- Add index for better performance
+CREATE INDEX IF NOT EXISTS idx_business_clients_has_items ON business_clients(has_items);
+
+
+-- Create business_client_services table in corp database
+CREATE TABLE business_client_services (
+    id SERIAL PRIMARY KEY,
+    business_client_id INTEGER REFERENCES business_clients(id) ON DELETE CASCADE,
+    service_id INTEGER REFERENCES services(id) ON DELETE CASCADE,
+    status VARCHAR(50) DEFAULT 'active', -- 'active', 'inactive', 'expired'
+    start_date DATE DEFAULT CURRENT_DATE,
+    end_date DATE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(business_client_id, service_id)
+);
+
+CREATE INDEX idx_business_client_services_client ON business_client_services(business_client_id);
+CREATE INDEX idx_business_client_services_service ON business_client_services(service_id);
+CREATE INDEX idx_business_client_services_active ON business_client_services(is_active);
