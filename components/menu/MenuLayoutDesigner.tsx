@@ -3,7 +3,7 @@
 
 "use client"
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -13,7 +13,14 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+
+
+import { getItemCategoryId, filterItemsByCategory, groupItemsByCategory } from "@/lib/category-utils"
+import { SectionManager } from "@/lib/section-manager"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useToast } from "@/hooks/use-toast"
+import { useDebouncedCallback } from 'use-debounce'
+
 import { 
   Grid3X3, 
   List, 
@@ -73,6 +80,7 @@ interface MenuItem {
     description: string
     image_url?: string
     category?: string
+    category_id?: string | number
   }
   category_id?: string
   is_active: boolean
@@ -95,6 +103,8 @@ interface MenuLayoutDesignerProps {
   items: MenuItem[]
   categories: Category[]
 }
+
+
 
 const SECTION_TYPES = [
   { 
@@ -215,6 +225,12 @@ export function MenuLayoutDesigner({
   const { toast } = useToast()
   const gridRef = useRef<HTMLDivElement>(null)
   
+
+const [sectionsRestored, setSectionsRestored] = useState(false)
+
+
+
+  
   // ✅ FIXED: Use useMemo and useCallback to prevent unnecessary re-renders
   const [gridLayout, setGridLayout] = useState<GridCell[][]>(() => {
     const grid: GridCell[][] = []
@@ -235,157 +251,165 @@ export function MenuLayoutDesigner({
   const [isDragging, setIsDragging] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isLoadingConfig, setIsLoadingConfig] = useState(false)
+  const [isDirty, setIsDirty] = useState(false) 
 
   // Content editor state
   const [isContentEditorOpen, setIsContentEditorOpen] = useState(false)
   const [editingSection, setEditingSection] = useState<LayoutSection | null>(null)
   const [pendingSection, setPendingSection] = useState<{type: string, position?: {row: number, col: number}} | null>(null)
 
-  // ✅ FIXED: Remove conflicting local state - make component fully controlled
+  // Remove conflicting local state - make component fully controlled
   const layoutType = config?.layout_type || 'list'
   const columns = config?.columns || 1
 
-  // ✅ FIXED: Add loading state for config
-  useEffect(() => {
-    if (!config) {
-      setIsLoadingConfig(true)
-    } else {
-      setIsLoadingConfig(false)
-    }
-  }, [config])
+  // Auto-save with debouncing to prevent freezing
+  const debouncedSave = useDebouncedCallback(
+    async (configToSave: any) => {
+      if (onSaveConfig) {
+        try {
+          await onSaveConfig(configToSave)
+          console.log('🔄 Auto-saved configuration')
+        } catch (error) {
+          console.error('❌ Auto-save failed:', error)
+        }
+      }
+    },
+    500 // 500ms debounce
+  )
 
+  // ✅ CRITICAL: Load sections from saved config FIRST
   useEffect(() => {
-    console.log('🔧 Loading sections from config:', config?.sections)
+    console.log('🔄 Config sections effect - sections in config:', config?.sections?.length || 0)
     
     if (config?.sections && config.sections.length > 0) {
-      console.log('✅ Found existing sections in config:', config.sections.length)
+      console.log('📥 Restoring sections from config:', config.sections.length, 'sections')
       
-      // FIXED: Properly reconstruct sections from database config
-      const configSections = config.sections.map((section: any, index: number) => {
-        console.log('🔧 Processing section from DB:', section.id, section.type, section.content)
-        
-        return {
-          id: section.id || `${section.type}-${index}`,
-          type: section.type,
-          gridPosition: section.gridPosition || { row: index, col: 0 },
-          gridSize: section.gridSize || { rowSpan: 1, colSpan: 2 },
-          content: section.content, // ✅ CRITICAL: Keep the saved content
-          style: section.style,
-          title: section.title,
-          category_id: section.category_id,
-          editable: section.type !== 'items' && section.type !== 'category'
-        }
-      })
+      // Reconstruct sections from config
+      const restoredSections: LayoutSection[] = config.sections.map((section: any) => ({
+        id: section.id,
+        type: section.type,
+        gridPosition: section.gridPosition || { row: 0, col: 0 },
+        gridSize: section.gridSize || { rowSpan: 1, colSpan: 4 },
+        content: section.content,
+        style: section.style,
+        title: section.title,
+        category_id: section.category_id,
+        editable: section.editable !== false
+      }))
       
-      console.log('✅ Reconstructed sections:', configSections)
-      setSections(configSections)
-      updateGridOccupancy(configSections)
-    } else {
-      console.log('📝 No existing sections, generating initial layout')
-      generateInitialLayout()
+      console.log('✅ Setting restored sections:', restoredSections.map(s => ({ 
+        id: s.id, 
+        type: s.type, 
+        editable: s.editable 
+      })))
+      
+      setSections(restoredSections)
+      updateGridOccupancy(restoredSections)
+      
+      // Mark as restored
+      setSectionsRestored(true)
     }
-  }, [config?.sections, selectedMenu, items.length, categories.length])
+  }, [config?.sections])
+
+  // ✅ SMART: Only regenerate when we have categories but NO sections from config
+  useEffect(() => {
+    console.log('🧠 Smart section management check:', {
+      categories: categories.length,
+      items: items.length,
+      sections: sections.length,
+      hasConfigSections: !!(config?.sections && config.sections.length > 0),
+      sectionsRestored
+    })
+    
+    // Don't run if we have no categories yet
+    if (categories.length === 0) {
+      console.log('⏳ Waiting for categories to load')
+      return
+    }
+
+    // ✅ CRITICAL: Don't run if config has sections (they will be restored by the other effect)
+    if (config?.sections && config.sections.length > 0) {
+      console.log('⏭️ Skipping smart management - config has sections that will be restored')
+      return
+    }
+
+    // ✅ CRITICAL: Don't regenerate if we already have sections
+    if (sections.length > 0) {
+      const hasPromotionalSections = sections.some(s => s.editable && (s.type === 'ad' || s.type === 'promotion' || s.type === 'special'))
+      
+      if (hasPromotionalSections) {
+        console.log('⏭️ Skipping regeneration - preserving promotional sections:', sections.filter(s => s.editable).length)
+        return
+      }
+      
+      console.log('⏭️ Skipping regeneration - sections already exist')
+      return
+    }
+
+    // Only generate if we have categories but no config sections and no current sections
+    console.log('🔄 Generating fresh sections for categories (no config sections exist)')
+
+    const styling = {
+      background_color: config?.theme?.bg_color || config?.styling?.background_color || '#f5f5f5',
+      card_color: config?.theme?.card_color || config?.styling?.card_color || '#ffffff',
+      text_color: config?.theme?.text_color || config?.styling?.text_color || '#1f2937',
+      primary_color: config?.theme?.primary_color || config?.styling?.primary_color || '#3b82f6',
+      card_elevation: config?.theme?.card_elevation || config?.styling?.card_elevation || 2,
+      border_radius: config?.theme?.border_radius || config?.styling?.border_radius || 8
+    }
+
+    const updatedSections = SectionManager.updateCategorySections(
+      [], // Start with empty array when generating fresh
+      categories,
+      items,
+      selectedMenu,
+      layoutType,
+      columns,
+      styling
+    )
+
+    const finalSections = SectionManager.repositionSectionsIfNeeded(updatedSections)
+
+    console.log('✅ Generated fresh sections:', finalSections.length)
+    setSections(finalSections)
+    updateGridOccupancy(finalSections)
+  }, [categories, items, selectedMenu, layoutType, columns, config?.sections])
+
+  // ✅ Menu change - reset flag when menu changes
+  useEffect(() => {
+    console.log('🔄 Menu change detection for:', selectedMenu)
+    setSectionsRestored(false)
+  }, [selectedMenu])
+
+      
+
+
+
+  // ✅ Menu change - reset restoration flag when menu actually changes
+  useEffect(() => {
+    console.log('🔄 Menu change detection for:', selectedMenu)
+    
+    // Reset restoration flag when menu changes to allow fresh loading
+    setSectionsRestored(false)
+    
+  }, [selectedMenu])
+
+
+
+
+
+  // Only reset sections when menu ACTUALLY changes, not on every render
+  useEffect(() => {
+    console.log('🔄 Menu change detection for:', selectedMenu)
+    
+    // Don't do anything - let the smart section management handle everything
+    // The aggressive clearing was the problem!
+    
+  }, [selectedMenu])
+  
+ 
 
   
-  const generateInitialLayout = useCallback(() => {
-    console.log('🏗️ Generating initial layout with:', {
-      layoutType: layoutType,
-      columns: columns,
-      itemsCount: items.length,
-      categoriesCount: categories.length
-    })
-    const newSections: LayoutSection[] = []
-    let currentRow = 0
-
-    // Group items by category
-    const itemsByCategory = items.reduce((acc, item) => {
-      const categoryId = item.category_id || 'uncategorized'
-      if (!acc[categoryId]) acc[categoryId] = []
-      acc[categoryId].push(item)
-      return acc
-    }, {} as Record<string, MenuItem[]>)
-
-    // Create sections for each category
-    categories.forEach(category => {
-      const categoryItems = itemsByCategory[category.id] || []
-      if (categoryItems.length > 0) {
-        // Add category section
-        newSections.push({
-          id: `category-${category.id}`,
-          type: 'category',
-          gridPosition: { row: currentRow, col: 0 },
-          gridSize: { rowSpan: 1, colSpan: 4 },
-          title: category.name,
-          category_id: category.id,
-          editable: false,
-          content: {
-            text: category.name,
-            background_color: category.color || '#f3f4f6',
-            text_color: '#1f2937',
-            font_size: 18,
-            font_weight: 'bold',
-            border_radius: 8,
-            padding: 12,
-            alignment: 'left'
-          }
-        })
-        currentRow++
-
-        // Add items section for this category
-        const itemsRows = layoutType === 'grid' ? Math.ceil(categoryItems.length / columns) : categoryItems.length
-        newSections.push({
-          id: `items-${category.id}`,
-          type: 'items',
-          gridPosition: { row: currentRow, col: 0 },
-          gridSize: { rowSpan: itemsRows, colSpan: 4 },
-          category_id: category.id,
-          editable: false,
-          title: `${category.name} Items`
-        })
-        currentRow += itemsRows + 1
-      }
-    })
-
-    // Handle uncategorized items
-    const uncategorizedItems = itemsByCategory['uncategorized'] || []
-    if (uncategorizedItems.length > 0) {
-      newSections.push({
-        id: 'category-uncategorized',
-        type: 'category',
-        gridPosition: { row: currentRow, col: 0 },
-        gridSize: { rowSpan: 1, colSpan: 4 },
-        title: 'Other Items',
-        category_id: 'uncategorized',
-        editable: false,
-        content: {
-          text: 'Other Items',
-          background_color: '#f3f4f6',
-          text_color: '#1f2937',
-          font_size: 18,
-          font_weight: 'bold',
-          border_radius: 8,
-          padding: 12,
-          alignment: 'left'
-        }
-      })
-      currentRow++
-
-      const itemsRows = layoutType === 'grid' ? Math.ceil(uncategorizedItems.length / columns) : uncategorizedItems.length
-      newSections.push({
-        id: 'items-uncategorized',
-        type: 'items',
-        gridPosition: { row: currentRow, col: 0 },
-        gridSize: { rowSpan: itemsRows, colSpan: 4 },
-        category_id: 'uncategorized',
-        editable: false,
-        title: 'Other Items'
-      })
-    }
-
-    setSections(newSections)
-    updateGridOccupancy(newSections)
-  }, [items, categories, layoutType, columns])
-
   const updateGridOccupancy = useCallback((currentSections: LayoutSection[]) => {
     const newGrid: GridCell[][] = []
     for (let row = 0; row < GRID_ROWS; row++) {
@@ -632,40 +656,36 @@ export function MenuLayoutDesigner({
   const updateSections = useCallback(async () => {
     setIsSaving(true)
     try {
-      console.log('💾 Saving sections with layout:', {
+      console.log('💾 Saving COMPLETE configuration (theme + layout):', {
         layoutType,
         columns,
         sectionsCount: sections.length,
-        sections
+        hasTheme: !!(config?.theme || config?.styling)
       })
+  
+      // Apply current theme to sections before saving
+      let finalSections = sections
+      if (config?.theme || config?.styling) {
+        console.log('🎨 Applying current theme to sections before save')
+        finalSections = SectionManager.applyThemeToSections(sections, config.theme || config.styling)
+        
+        // Update UI with themed sections
+        setSections(finalSections)
+        updateGridOccupancy(finalSections)
+      }
     
-      const configSections = sections.map(section => {
-        console.log('💾 Processing section for save:', section.id, section.content)
-        return {
-          id: section.id,
-          type: section.type,
-          gridPosition: section.gridPosition,
-          gridSize: section.gridSize,
-          content: section.content ? {
-            text: section.content.text,
-            subtitle: section.content.subtitle,
-            image_url: section.content.image_url,
-            background_color: section.content.background_color,
-            text_color: section.content.text_color,
-            font_size: section.content.font_size,
-            font_weight: section.content.font_weight,
-            border_radius: section.content.border_radius,
-            padding: section.content.padding,
-            alignment: section.content.alignment
-          } : undefined,
-          style: section.style,
-          title: section.title,
-          category_id: section.category_id,
-          editable: section.editable
-        }
-      })
+      const configSections = finalSections.map(section => ({
+        id: section.id,
+        type: section.type,
+        gridPosition: section.gridPosition,
+        gridSize: section.gridSize,
+        content: section.content,
+        style: section.style,
+        title: section.title,
+        category_id: section.category_id,
+        editable: section.editable
+      }))
       
-      // ✅ FIXED: Create styling object in Flutter format
       const currentStyling = config?.styling || config?.theme || {}
       const updatedStyling = {
         background_color: currentStyling.bg_color || currentStyling.background_color || '#f5f5f5',
@@ -675,53 +695,45 @@ export function MenuLayoutDesigner({
         card_elevation: currentStyling.card_elevation || 2,
         border_radius: currentStyling.border_radius || 8
       }
-      
-      console.log('💾 Final config to save:', {
-        layout_type: layoutType,
-        columns: columns,
-        sections: configSections.length,
-        selectedMenu: selectedMenu,
-        styling: updatedStyling,
-        configSections
-      })
         
       const updatedConfig = {
         ...config,
         layout_type: layoutType,
         columns: columns,
+        theme: config?.theme || {}, // Preserve existing theme
         styling: updatedStyling,
         sections: configSections,
         selectedMenu: selectedMenu
       }
-
+  
       onChange(updatedConfig)
-
+      
       if (onSaveConfig) {
         await onSaveConfig(updatedConfig)
       }
-
+  
+      setIsDirty(false)
       toast({
-        title: "Layout Saved",
-        description: `Layout configuration saved for ${selectedMenu}.`,
+        title: "Layout & Theme Saved",
+        description: `Complete configuration saved for ${selectedMenu}.`,
       })
     } catch (error) {
-      console.error('Error saving layout:', error)
+      console.error('Error saving complete configuration:', error)
       toast({
         title: "Save Failed",
-        description: "Failed to save layout configuration.",
+        description: "Failed to save configuration.",
         variant: "destructive"
       })
     } finally {
       setIsSaving(false)
     }
-  }, [sections, config, layoutType, columns, selectedMenu, onChange, onSaveConfig, toast])
+  }, [sections, config, layoutType, columns, selectedMenu, onChange, onSaveConfig, toast, updateGridOccupancy])
 
   const renderSectionContent = useCallback((section: LayoutSection) => {
     if (section.type === 'items') {
-      const sectionItems = items.filter(item => 
-        (item.category_id || 'uncategorized') === section.category_id
-      )
-
+      // Use standardized filtering
+      const sectionItems = filterItemsByCategory(items, section.category_id || '')
+  
       if (layoutType === 'grid') {
         return (
           <div 
@@ -749,7 +761,8 @@ export function MenuLayoutDesigner({
         )
       }
     }
-
+  
+    // Rest of the function remains the same...
     if (section.type === 'category') {
       return (
         <div 
@@ -768,7 +781,7 @@ export function MenuLayoutDesigner({
         </div>
       )
     }
-
+  
     if (section.content) {
       return (
         <div 
@@ -800,7 +813,7 @@ export function MenuLayoutDesigner({
         </div>
       )
     }
-
+  
     return (
       <div className="w-full h-full bg-gray-100 rounded flex items-center justify-center text-xs text-gray-500">
         {section.title}
@@ -874,7 +887,7 @@ export function MenuLayoutDesigner({
                   <Slider
                     value={[columns]}
                     onValueChange={handleColumnsChange}
-                    max={4}
+                    max={8}
                     min={2}
                     step={1}
                     className="w-full"

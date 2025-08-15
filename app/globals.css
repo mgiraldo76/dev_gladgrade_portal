@@ -152,3 +152,29 @@
 * {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
+
+
+
+
+
+
+/* Font Family Variables */
+.font-inter { font-family: var(--font-inter); }
+.font-montserrat { font-family: var(--font-montserrat); }
+.font-poppins { font-family: var(--font-poppins); }
+.font-open-sans { font-family: var(--font-open-sans); }
+.font-lato { font-family: var(--font-lato); }
+.font-work-sans { font-family: var(--font-work-sans); }
+.font-nunito { font-family: var(--font-nunito); }
+.font-playfair { font-family: var(--font-playfair); }
+.font-dancing-script { font-family: var(--font-dancing-script); }
+.font-caveat { font-family: var(--font-caveat); }
+.font-kalam { font-family: var(--font-kalam); }
+.font-permanent-marker { font-family: var(--font-permanent-marker); }
+.font-amatic-sc { font-family: var(--font-amatic-sc); }
+.font-jetbrains-mono { font-family: var(--font-jetbrains-mono); }
+.font-fira-code { font-family: var(--font-fira-code); }
+.font-source-sans { font-family: var(--font-source-sans); }
+.font-merriweather { font-family: var(--font-merriweather); }
+.font-libre-baskerville { font-family: var(--font-libre-baskerville); }
+.font-crimson-text { font-family: var(--font-crimson-text); }

@@ -25,6 +25,7 @@ interface MenuItem {
     description: string
     image_url?: string
     category?: string
+    category_id?: number | string 
   }
   category_id?: string
   is_active: boolean
@@ -90,14 +91,14 @@ export function MobilePreview({ config, items, categories, businessInfo }: Mobil
   const [isExpanded, setIsExpanded] = useState(false)
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
 
-  // ✅ FIXED: Use Flutter-compatible styling format with proper fallbacks
   const styling = {
     background_color: config.theme?.bg_color || config.styling?.background_color || '#f5f5f5',
     card_color: config.theme?.card_color || config.styling?.card_color || '#ffffff',
     text_color: config.theme?.text_color || config.styling?.text_color || '#1f2937',
     primary_color: config.theme?.primary_color || config.styling?.primary_color || '#3b82f6',
     card_elevation: config.theme?.card_elevation || config.styling?.card_elevation || 2,
-    border_radius: config.theme?.border_radius || config.styling?.border_radius || 8
+    border_radius: config.theme?.border_radius || config.styling?.border_radius || 8,
+    font_family: config.theme?.font_family || config.styling?.font_family || 'var(--font-inter)'
   }
 
   const layoutType = config.layout_type || 'list'
@@ -113,6 +114,24 @@ export function MobilePreview({ config, items, categories, businessInfo }: Mobil
     const selectedMenuName = config.selectedMenu || 'Default Menu'
     return itemMenuName === selectedMenuName && item.is_active
   })
+
+  // Add this debug code after line where currentMenuItems is defined
+  console.log('🔍 MOBILE PREVIEW DEBUG:')
+  console.log('🔍 MOBILE PREVIEW DEBUG:')
+  console.log('📊 currentMenuItems raw structure:', currentMenuItems)
+  console.log('📊 first item structure:', currentMenuItems[0])
+  console.log('📊 sections with category_ids:', sections.map((s: any) => ({
+    type: s.type,
+    category_id: s.category_id,
+    id: s.id
+  })))
+
+
+  console.log('📊 sections with category_ids:', sections.map((s: any) => ({
+    type: s.type,
+    category_id: s.category_id,
+    id: s.id
+  })))
 
   console.log('🔍 Filtered items for preview:', {
     selectedMenu: config.selectedMenu,
@@ -154,81 +173,99 @@ export function MobilePreview({ config, items, categories, businessInfo }: Mobil
   const phoneWidth = orientation === 'portrait' ? 320 : 568
   const phoneHeight = orientation === 'portrait' ? 568 : 320
 
-  // ✅ FIXED: Render items based on actual categories, not section configuration
+  
   const renderMenuContent = () => {
+    console.log('🎨 RENDERING MENU CONTENT')
+    console.log('📊 Available sections:', sections.map((s: any) => ({ type: s.type, category_id: s.category_id })))
+    console.log('📊 Available categories:', categories.map(c => ({ id: c.id, name: c.name })))
+    console.log('📊 Available items:', currentMenuItems.map(i => ({ name: i.data.name, category_id: i.category_id })))
+  
     if (sections.length > 0) {
-      // Render using sections configuration but with SMART category mapping
-      return sections.map((section: any, index: number) => {
-        console.log('🔍 Rendering section:', section.type, section.category_id)
+      console.log('✅ Using sections-based rendering with proper order')
+      
+      // ✅ CRITICAL FIX: Sort sections by their grid row position BEFORE rendering
+      const sortedSections = [...sections].sort((a: any, b: any) => {
+        const aRow = a.gridPosition?.row || 0
+        const bRow = b.gridPosition?.row || 0
+        return aRow - bRow
+      })
+      
+      console.log('📊 Sections sorted by grid position:', sortedSections.map((s: any) => ({
+        type: s.type,
+        row: s.gridPosition?.row,
+        category_id: s.category_id
+      })))
+      
+      return sortedSections.map((section: {
+        type: string;
+        category_id?: string;
+        gridPosition?: { row: number; col: number };
+        content?: {
+          text?: string;
+          subtitle?: string;
+          background_color?: string;
+          text_color?: string;
+          font_size?: number;
+          font_weight?: string;
+          alignment?: 'left' | 'center' | 'right';
+          border_radius?: number;
+          padding?: number;
+          image_url?: string;
+        };
+        title?: string;
+      }, index: number) => {
+        console.log(`🔍 Processing section ${index}: ${section.type} for category_id: ${section.category_id}`)
         
         if (section.type === 'category') {
-          // ✅ FIXED: Smart category name resolution
-          let categoryName = section.content?.text || section.title || 'Category'
+          // Get the actual category name from the categories array
+          const actualCategory = categories.find(cat => String(cat.id) === String(section.category_id))
+          const categoryName = actualCategory ? actualCategory.name : (section.content?.text || 'Category')
           
-          if (section.category_id === 'uncategorized' && categories.length > 0) {
-            // Use the first real category name instead of "Other Items"
-            categoryName = categories[0].name
-            console.log('🏷️ Mapped uncategorized section to actual category:', categoryName)
-          } else if (section.category_id && section.category_id !== 'uncategorized') {
-            const actualCategory = categories.find(cat => String(cat.id) === String(section.category_id))
-            if (actualCategory) {
-              categoryName = actualCategory.name
-            }
-          }
-          
-          console.log('🏷️ Final category name:', categoryName, 'for section:', section.category_id)
+          console.log(`🏷️ Category section: ${section.category_id} → "${categoryName}"`)
           
           return (
             <div 
-              key={index}
-              className="mb-2 px-2 py-1 rounded font-bold text-sm"
+              key={`category-${index}`}
+              className="mb-2 px-3 py-2 rounded font-bold text-sm flex items-center"
               style={{
-                backgroundColor: section.content?.background_color || styling.primary_color,
+                // ✅ CRITICAL FIX: Proper color hierarchy for Flutter compatibility
+                backgroundColor: section.content?.background_color || actualCategory?.color || styling.primary_color,
                 color: section.content?.text_color || '#ffffff',
                 fontSize: `${section.content?.font_size || 16}px`,
                 fontWeight: section.content?.font_weight || 'bold',
-                borderRadius: `${styling.border_radius}px`,
-                textAlign: section.content?.alignment || 'left'
+                borderRadius: `${section.content?.border_radius || styling.border_radius}px`,
+                textAlign: (section.content?.alignment as 'left' | 'center' | 'right') || 'left',
+                padding: `${section.content?.padding || 12}px`
               }}
             >
+              {actualCategory?.icon && <span className="mr-2">{actualCategory.icon}</span>}
               {categoryName}
             </div>
           )
         }
-
+  
         if (section.type === 'items') {
-          // ✅ FIXED: Get items using SMART category mapping
-          let sectionItems: MenuItem[] = []
+          const sectionItems = currentMenuItems.filter(item => {
+          const itemCategoryId = String(item.data?.category_id || '')
+          const sectionCategoryId = String(section.category_id || '')
+          const matches = itemCategoryId === sectionCategoryId
           
-          if (section.category_id === 'uncategorized') {
-            // Map all items with undefined category_id to first real category if available
-            if (categories.length > 0) {
-              const firstCategoryId = categories[0].id
-              sectionItems = currentMenuItems.filter(item => 
-                !item.category_id || 
-                item.category_id === 'uncategorized' || 
-                item.category_id === undefined ||
-                String(item.category_id) === String(firstCategoryId)
-              )
-              console.log('🔍 Smart mapping: assigned undefined items to category:', categories[0].name)
-            } else {
-              // Truly uncategorized items when no categories exist
-              sectionItems = currentMenuItems.filter(item => 
-                !item.category_id || item.category_id === 'uncategorized' || item.category_id === undefined
-              )
-            }
-          } else {
-            sectionItems = currentMenuItems.filter(item => 
-              String(item.category_id) === String(section.category_id)
-            )
+          console.log(`🔍 Item "${item.data.name}" (cat: ${itemCategoryId}) vs Section (cat: ${sectionCategoryId}) = ${matches}`)
+          return matches
+        })
+          
+          console.log(`📝 Items section for category ${section.category_id}: found ${sectionItems.length} items`)
+          
+          if (sectionItems.length === 0) {
+            console.log('⚠️ No items found for this category section')
+            return null
           }
-          
-          console.log('🔍 Items for section:', section.category_id, 'found:', sectionItems.length)
-          
+  
+          // Render items in the configured layout
           if (layoutType === 'grid') {
             return (
               <div 
-                key={index}
+                key={`items-${index}`}
                 className="grid gap-2 mb-4"
                 style={{ gridTemplateColumns: `repeat(${Math.min(columns, 2)}, 1fr)` }}
               >
@@ -278,7 +315,7 @@ export function MobilePreview({ config, items, categories, businessInfo }: Mobil
           } else {
             // List layout
             return (
-              <div key={index} className="space-y-2 mb-4">
+              <div key={`items-${index}`} className="space-y-2 mb-4">
                 {sectionItems.map((item) => (
                   <div 
                     key={item.id}
@@ -330,19 +367,23 @@ export function MobilePreview({ config, items, categories, businessInfo }: Mobil
             )
           }
         }
-
-        // Handle promotional sections
+  
+        // Handle promotional sections (unchanged)
         if (section.type === 'ad' || section.type === 'promotion' || section.type === 'special') {
+          console.log(`🎯 Rendering promotional section at position row ${section.gridPosition?.row}`)
+          
           return (
             <div 
-              key={index}
-              className="p-3 rounded text-center text-sm mb-4"
+              key={`promo-${index}-row-${section.gridPosition?.row}`}
+              className="p-3 rounded text-center text-sm mb-4 relative"
               style={{ 
                 backgroundColor: section.content?.background_color || styling.primary_color,
                 color: section.content?.text_color || '#ffffff',
-                borderRadius: `${styling.border_radius}px`,
+                borderRadius: `${section.content?.border_radius || styling.border_radius}px`,
                 fontSize: `${section.content?.font_size || 16}px`,
-                fontWeight: section.content?.font_weight || 'bold'
+                fontWeight: section.content?.font_weight || 'bold',
+                padding: `${section.content?.padding || 12}px`,
+                textAlign: (section.content?.alignment as 'left' | 'center' | 'right') || 'center'
               }}
             >
               {section.content?.text || 'Promotional Content'}
@@ -353,51 +394,111 @@ export function MobilePreview({ config, items, categories, businessInfo }: Mobil
                 <img 
                   src={section.content.image_url} 
                   alt="" 
-                  className="mt-2 max-w-full max-h-16 object-contain mx-auto"
-                  style={{ borderRadius: `${styling.border_radius}px` }}
+                  className="mt-2 max-w-full max-h-8 object-contain mx-auto"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
                 />
               )}
+              {/* Debug indicator - remove in production */}
+              <div className="absolute top-1 right-1 text-xs opacity-50">
+                R{section.gridPosition?.row}
+              </div>
             </div>
           )
         }
-
+  
         return null
       })
     } else {
-      // ✅ FIXED: Show items grouped by ACTUAL categories when no sections defined
-      return Object.entries(itemsByActualCategory).map(([categoryId, { category, items: categoryItems }]) => (
-        <div key={categoryId} className="mb-4">
-          {/* Category Header - Use ACTUAL category name */}
-          <div 
-            className="mb-2 px-2 py-1 rounded font-bold text-sm"
-            style={{
-              backgroundColor: styling.primary_color,
-              color: '#ffffff',
-              borderRadius: `${styling.border_radius}px`
-            }}
-          >
-            {category ? category.name : 'Other Items'}
-          </div>
-
-          {/* Items for this category */}
-          {layoutType === 'grid' ? (
+      // Fallback: No sections defined - use direct category iteration
+      console.log('📝 No sections found, using direct category iteration')
+      
+      return categories.map((category) => {
+        const categoryItems = currentMenuItems.filter(item => 
+          String(item.category_id || '') === String(category.id)
+        )
+        
+        if (categoryItems.length === 0) return null
+        
+        return (
+          <div key={category.id} className="mb-4">
+            {/* Category Header */}
             <div 
-              className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${Math.min(columns, 2)}, 1fr)` }}
+              className="mb-2 px-3 py-2 rounded font-bold text-sm flex items-center"
+              style={{
+                // ✅ CRITICAL FIX: Use individual category color first, then theme
+                backgroundColor: category.color || styling.primary_color,
+                color: '#ffffff',
+                borderRadius: `${styling.border_radius}px`
+              }}
             >
-              {categoryItems.map((item) => (
-                <div 
-                  key={item.id}
-                  className="p-2 shadow-sm"
-                  style={{ 
-                    backgroundColor: styling.card_color,
-                    borderRadius: `${styling.border_radius}px`,
-                    boxShadow: `0 ${styling.card_elevation}px ${styling.card_elevation * 2}px rgba(0,0,0,0.1)`
-                  }}
-                >
-                  <div className="text-center">
+              {category.icon && <span className="mr-2">{category.icon}</span>}
+              {category.name}
+            </div>
+  
+            {/* Items for this category */}
+            {layoutType === 'grid' ? (
+              <div 
+                className="grid gap-2"
+                style={{ gridTemplateColumns: `repeat(${Math.min(columns, 2)}, 1fr)` }}
+              >
+                {categoryItems.map((item) => (
+                  <div 
+                    key={item.id}
+                    className="p-2 shadow-sm"
+                    style={{ 
+                      backgroundColor: styling.card_color,
+                      borderRadius: `${styling.border_radius}px`,
+                      boxShadow: `0 ${styling.card_elevation}px ${styling.card_elevation * 2}px rgba(0,0,0,0.1)`
+                    }}
+                  >
+                    <div className="text-center">
+                      <div 
+                        className="w-full h-20 bg-gray-200 rounded mb-2 flex items-center justify-center"
+                        style={{ borderRadius: `${styling.border_radius - 2}px` }}
+                      >
+                        {item.data.image_url ? (
+                          <img 
+                            src={item.data.image_url} 
+                            alt={item.data.name}
+                            className="w-full h-full object-cover rounded"
+                            style={{ borderRadius: `${styling.border_radius - 2}px` }}
+                          />
+                        ) : (
+                          <span className="text-xs text-gray-400">IMG</span>
+                        )}
+                      </div>
+                      <h4 
+                        className="font-medium text-xs truncate"
+                        style={{ color: styling.text_color }}
+                      >
+                        {item.data.name}
+                      </h4>
+                      <p 
+                        className="font-bold text-sm"
+                        style={{ color: styling.primary_color }}
+                      >
+                        ${item.data.price.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {categoryItems.map((item) => (
+                  <div 
+                    key={item.id}
+                    className="flex items-start gap-3 p-3 shadow-sm"
+                    style={{ 
+                      backgroundColor: styling.card_color,
+                      borderRadius: `${styling.border_radius}px`,
+                      boxShadow: `0 ${styling.card_elevation}px ${styling.card_elevation * 2}px rgba(0,0,0,0.1)`
+                    }}
+                  >
                     <div 
-                      className="w-full h-20 bg-gray-200 rounded mb-2 flex items-center justify-center"
+                      className="w-12 h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center"
                       style={{ borderRadius: `${styling.border_radius - 2}px` }}
                     >
                       {item.data.image_url ? (
@@ -408,78 +509,36 @@ export function MobilePreview({ config, items, categories, businessInfo }: Mobil
                           style={{ borderRadius: `${styling.border_radius - 2}px` }}
                         />
                       ) : (
-                        <span className="text-xs text-gray-400">IMG</span>
+                        <span className="text-xs text-gray-500">IMG</span>
                       )}
                     </div>
-                    <h4 
-                      className="font-medium text-xs truncate"
-                      style={{ color: styling.text_color }}
-                    >
-                      {item.data.name}
-                    </h4>
-                    <p 
-                      className="font-bold text-sm"
-                      style={{ color: styling.primary_color }}
-                    >
-                      ${item.data.price.toFixed(2)}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <h4 
+                        className="font-medium text-sm truncate"
+                        style={{ color: styling.text_color }}
+                      >
+                        {item.data.name}
+                      </h4>
+                      <p 
+                        className="text-xs opacity-70 line-clamp-1 mt-1"
+                        style={{ color: styling.text_color }}
+                      >
+                        {item.data.description}
+                      </p>
+                      <p 
+                        className="font-bold text-sm mt-1"
+                        style={{ color: styling.primary_color }}
+                      >
+                        ${item.data.price.toFixed(2)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {categoryItems.map((item) => (
-                <div 
-                  key={item.id}
-                  className="flex items-start gap-3 p-3 shadow-sm"
-                  style={{ 
-                    backgroundColor: styling.card_color,
-                    borderRadius: `${styling.border_radius}px`,
-                    boxShadow: `0 ${styling.card_elevation}px ${styling.card_elevation * 2}px rgba(0,0,0,0.1)`
-                  }}
-                >
-                  <div 
-                    className="w-12 h-12 bg-gray-200 rounded flex-shrink-0 flex items-center justify-center"
-                    style={{ borderRadius: `${styling.border_radius - 2}px` }}
-                  >
-                    {item.data.image_url ? (
-                      <img 
-                        src={item.data.image_url} 
-                        alt={item.data.name}
-                        className="w-full h-full object-cover rounded"
-                        style={{ borderRadius: `${styling.border_radius - 2}px` }}
-                      />
-                    ) : (
-                      <span className="text-xs text-gray-500">IMG</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 
-                      className="font-medium text-sm truncate"
-                      style={{ color: styling.text_color }}
-                    >
-                      {item.data.name}
-                    </h4>
-                    <p 
-                      className="text-xs opacity-70 line-clamp-1 mt-1"
-                      style={{ color: styling.text_color }}
-                    >
-                      {item.data.description}
-                    </p>
-                    <p 
-                      className="font-bold text-sm mt-1"
-                      style={{ color: styling.primary_color }}
-                    >
-                      ${item.data.price.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ))
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })
     }
   }
 
@@ -553,9 +612,12 @@ export function MobilePreview({ config, items, categories, businessInfo }: Mobil
 
               {/* App Content */}
               <div 
-                className="absolute top-16 left-0 right-0 bottom-0 overflow-y-auto"
-                style={{ backgroundColor: styling.background_color }}
-              >
+                  className="absolute top-16 left-0 right-0 bottom-0 overflow-y-auto"
+                  style={{ 
+                    backgroundColor: styling.background_color,
+                    fontFamily: styling.font_family
+                  }}
+                >
                 <div className="p-3">
                   {currentMenuItems.length > 0 ? (
                     renderMenuContent()

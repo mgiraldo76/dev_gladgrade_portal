@@ -3,7 +3,7 @@
 
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -11,6 +11,9 @@ import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { SectionManager } from "@/lib/section-manager"
+import { useToast } from "@/hooks/use-toast"
+
 import { 
   Palette,
   Type,
@@ -34,10 +37,14 @@ interface ThemeConfig {
   spacing_unit?: number
 }
 
+
+
 interface ThemeCustomizerProps {
   config: any
   onChange: (config: any) => void
+  onSaveConfig?: (config: any) => Promise<void>  // ADD THIS LINE
 }
+
 
 const COLOR_PRESETS = [
   { name: 'Default', bg: '#f5f5f5', card: '#ffffff', text: '#1f2937', primary: '#3b82f6' },
@@ -45,59 +52,131 @@ const COLOR_PRESETS = [
   { name: 'Warm', bg: '#fef7ed', card: '#ffffff', text: '#92400e', primary: '#f59e0b' },
   { name: 'Cool', bg: '#f0f9ff', card: '#ffffff', text: '#164e63', primary: '#0891b2' },
   { name: 'Nature', bg: '#f7fee7', card: '#ffffff', text: '#365314', primary: '#65a30d' },
-  { name: 'Elegant', bg: '#faf7ff', card: '#ffffff', text: '#581c87', primary: '#9333ea' }
+  { name: 'Elegant', bg: '#faf7ff', card: '#ffffff', text: '#581c87', primary: '#9333ea' },
+  { name: 'Midnight', bg: '#000000', card: '#1a1a1a', text: '#ffffff', primary: '#ffd700' },
+  { name: 'Obsidian', bg: '#0f0f0f', card: '#262626', text: '#f5f5f5', primary: '#ff8c00' },
+  { name: 'Rose Garden', bg: '#fef7f7', card: '#ffffff', text: '#4a1a1a', primary: '#e91e63' },
+
+  { name: 'TMobile Rose', bg: '#e91e63', card: '#ff69b4', text: '#4a1a1a', primary: '#530029' },
+
+  { name: 'Pink Sunset', bg: '#fff0f8', card: '#ffffff', text: '#5a1a3a', primary: '#ff69b4' },
+  { name: 'Golden Hour', bg: '#fff8e1', card: '#ffffff', text: '#1a1a1a', primary: '#2d2d2d' },
+  { name: 'Steel Gray', bg: '#f5f5f5', card: '#ffffff', text: '#1f1f1f', primary: '#424242' }
 ]
 
 const FONT_OPTIONS = [
   { name: 'System Default', value: 'system-ui, -apple-system, sans-serif' },
-  { name: 'Inter', value: 'Inter, sans-serif' },
+  { name: 'Inter', value: 'var(--font-inter)' },
   { name: 'Roboto', value: 'Roboto, sans-serif' },
-  { name: 'Open Sans', value: 'Open Sans, sans-serif' },
-  { name: 'Poppins', value: 'Poppins, sans-serif' },
-  { name: 'Playfair Display', value: 'Playfair Display, serif' }
+  { name: 'Open Sans', value: 'var(--font-open-sans)' },
+  { name: 'Poppins', value: 'var(--font-poppins)' },
+  { name: 'Playfair Display', value: 'var(--font-playfair)' },
+  
+  // Modern Sans-Serif Fonts
+  { name: 'Helvetica Neue', value: 'Helvetica Neue, Arial, sans-serif' },
+  { name: 'SF Pro Display', value: 'SF Pro Display, system-ui, sans-serif' },
+  { name: 'Montserrat', value: 'var(--font-montserrat)' },
+  { name: 'Lato', value: 'var(--font-lato)' },
+  { name: 'Source Sans Pro', value: 'var(--font-source-sans)' },
+  { name: 'Nunito', value: 'var(--font-nunito)' },
+  { name: 'Work Sans', value: 'var(--font-work-sans)' },
+  
+  // Serif Fonts
+  { name: 'Georgia', value: 'Georgia, serif' },
+  { name: 'Times New Roman', value: 'Times New Roman, serif' },
+  { name: 'Crimson Text', value: 'var(--font-crimson-text)' },
+  { name: 'Merriweather', value: 'var(--font-merriweather)' },
+  { name: 'Libre Baskerville', value: 'var(--font-libre-baskerville)' },
+  
+  // Handwritten/Script Fonts
+  { name: 'Dancing Script', value: 'var(--font-dancing-script)' },
+  { name: 'Caveat', value: 'var(--font-caveat)' },
+  { name: 'Kalam', value: 'var(--font-kalam)' },
+  { name: 'Permanent Marker', value: 'var(--font-permanent-marker)' },
+  { name: 'Amatic SC', value: 'var(--font-amatic-sc)' },
+  
+  // Monospace/Display
+  { name: 'JetBrains Mono', value: 'var(--font-jetbrains-mono)' },
+  { name: 'Fira Code', value: 'var(--font-fira-code)' }
 ]
 
-export function ThemeCustomizer({ config, onChange }: ThemeCustomizerProps) {
-  const [activeTab, setActiveTab] = useState('colors')
+export function ThemeCustomizer({ config, onChange, onSaveConfig }: ThemeCustomizerProps) {
 
-  // ✅ FIXED: Memoize theme object to prevent unnecessary re-renders
-  const theme = useMemo(() => config?.theme || {
-    bg_color: '#f5f5f5',
-    card_color: '#ffffff',
-    text_color: '#1f2937',
-    primary_color: '#3b82f6',
-    card_elevation: 2,
-    border_radius: 8,
-    font_family: 'system-ui, -apple-system, sans-serif',
-    font_size_base: 16,
-    spacing_unit: 8
-  }, [config?.theme])
+    const [activeTab, setActiveTab] = useState('colors')
 
-  // ✅ FIXED: Use debounced theme updates to prevent excessive onChange calls
-  const updateTheme = useCallback((updates: Partial<ThemeConfig>) => {
-    const newTheme = { ...theme, ...updates }
+    const [isSaving, setIsSaving] = useState(false)
+    const { toast } = useToast()
+
+    // ✅ FIXED: Memoize theme object to prevent unnecessary re-renders
+    const theme = useMemo(() => config?.theme || {
+      bg_color: '#f5f5f5',
+      card_color: '#ffffff',
+      text_color: '#1f2937',
+      primary_color: '#3b82f6',
+      card_elevation: 2,
+      border_radius: 8,
+      font_family: 'system-ui, -apple-system, sans-serif',
+      font_size_base: 16,
+      spacing_unit: 8
+    }, [config?.theme])
+
+    // ✅ CRITICAL FIX: Use useRef for debounce timeouts to prevent memory leaks
+  const debounceTimeouts = useRef<Record<string, NodeJS.Timeout>>({})
+
+  // ✅ CRITICAL FIX: Debounced update function to prevent freezing
+  const debouncedUpdateTheme = useCallback((updates: Partial<ThemeConfig>, delay: number = 150) => {
+    const updateKey = Object.keys(updates)[0] || 'general'
     
-    // Debounce the onChange call to prevent freezing
-    const timeoutId = setTimeout(() => {
+    // Clear existing timeout for this update type
+    if (debounceTimeouts.current[updateKey]) {
+      clearTimeout(debounceTimeouts.current[updateKey])
+    }
+    
+    // Set new timeout
+    debounceTimeouts.current[updateKey] = setTimeout(() => {
+      const newTheme = { ...theme, ...updates }
+      console.log('🎨 Applying debounced theme update:', updates)
+      
       onChange({
+        ...config,
         theme: newTheme
       })
-    }, 50) // 50ms debounce
+      
+      // Clean up timeout reference
+      delete debounceTimeouts.current[updateKey]
+    }, delay)
+  }, [theme, config, onChange])
 
-    return () => clearTimeout(timeoutId)
-  }, [theme, onChange])
 
-  // ✅ FIXED: Debounced color change handlers
+
+  // ✅ CRITICAL FIX: Individual color change handlers with proper debouncing
   const handleColorChange = useCallback((colorKey: keyof ThemeConfig, value: string) => {
     console.log(`🎨 Color change: ${colorKey} = ${value}`)
     
-    // Use setTimeout to debounce color changes and prevent freezing
-    const timeoutId = setTimeout(() => {
-      updateTheme({ [colorKey]: value })
-    }, 100) // 100ms debounce for color changes
+    // Apply change immediately to local state for responsive UI
+    const updates = { [colorKey]: value }
+    
+    // Debounce the actual parent update
+    debouncedUpdateTheme(updates, 200)
+  }, [debouncedUpdateTheme])
 
-    return () => clearTimeout(timeoutId)
-  }, [updateTheme])
+  // ✅ FIX: Update non-color theme properties without debouncing
+  const updateTheme = useCallback((updates: Partial<ThemeConfig>) => {
+    const newTheme = { ...theme, ...updates }
+    onChange({
+      ...config,
+      theme: newTheme
+    })
+  }, [theme, config, onChange])
+
+  // ✅ FIX: Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimeouts.current).forEach(timeout => {
+        clearTimeout(timeout)
+      })
+    }
+  }, [])
 
   const applyPreset = useCallback((preset: typeof COLOR_PRESETS[0]) => {
     console.log('🎨 Applying preset:', preset.name)
@@ -121,6 +200,46 @@ export function ThemeCustomizer({ config, onChange }: ThemeCustomizerProps) {
     })
   }, [applyPreset, updateTheme])
 
+  const saveThemeWithLayout = useCallback(async () => {
+    setIsSaving(true)
+    try {
+      console.log('🎨 Saving COMPLETE configuration (theme + layout)')
+      
+      // Get current sections and apply new theme
+      const currentSections = config?.sections || []
+      const themedSections = SectionManager.applyThemeToSections(currentSections, theme)
+      
+      const completeConfig = {
+        ...config,
+        sections: themedSections, // Include sections with applied theme
+        theme: theme,
+        styling: theme // Also update styling for Flutter compatibility
+      }
+      
+      onChange(completeConfig)
+      
+      if (onSaveConfig) {
+        await onSaveConfig(completeConfig)
+      }
+      
+      toast({
+        title: "Theme & Layout Saved",
+        description: "Theme applied to all sections and saved.",
+      })
+    } catch (error) {
+      console.error('Error saving theme with layout:', error)
+      toast({
+        title: "Save Failed",
+        description: "Failed to save theme configuration.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }, [config, theme, onChange, onSaveConfig, toast])
+
+
+  
   return (
     <div className="space-y-6">
       {/* Theme Presets */}
@@ -135,31 +254,54 @@ export function ThemeCustomizer({ config, onChange }: ThemeCustomizerProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-3">
-            {COLOR_PRESETS.map((preset) => (
-              <Button
-                key={preset.name}
-                variant="outline"
-                className="h-20 p-3 flex flex-col items-center justify-center gap-2"
-                onClick={() => applyPreset(preset)}
+          <div className="space-y-4">
+            <div className="grid grid-cols-4 gap-3">
+              {COLOR_PRESETS.map((preset) => (
+                <Button
+                  key={preset.name}
+                  variant="outline"
+                  className="h-20 p-3 flex flex-col items-center justify-center gap-2"
+                  onClick={() => applyPreset(preset)}
+                >
+                  <div className="flex gap-1">
+                    <div 
+                      className="w-4 h-4 rounded-full border"
+                      style={{ backgroundColor: preset.bg }}
+                    />
+                    <div 
+                      className="w-4 h-4 rounded-full border"
+                      style={{ backgroundColor: preset.card }}
+                    />
+                    <div 
+                      className="w-4 h-4 rounded-full border"
+                      style={{ backgroundColor: preset.primary }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium">{preset.name}</span>
+                </Button>
+              ))}
+            </div>
+            
+            {/* ADD THIS SAVE BUTTON */}
+            <div className="flex justify-center pt-4 border-t">
+              <Button 
+                onClick={saveThemeWithLayout} 
+                disabled={isSaving}
+                className="flex items-center gap-2"
               >
-                <div className="flex gap-1">
-                  <div 
-                    className="w-4 h-4 rounded-full border"
-                    style={{ backgroundColor: preset.bg }}
-                  />
-                  <div 
-                    className="w-4 h-4 rounded-full border"
-                    style={{ backgroundColor: preset.card }}
-                  />
-                  <div 
-                    className="w-4 h-4 rounded-full border"
-                    style={{ backgroundColor: preset.primary }}
-                  />
-                </div>
-                <span className="text-xs font-medium">{preset.name}</span>
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Palette className="h-4 w-4" />
+                    Save Theme & Layout
+                  </>
+                )}
               </Button>
-            ))}
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -743,6 +743,12 @@ class ApiClient {
       method: 'DELETE'
     })
   }
+  // Delete entire menu and all its items
+  async deleteMenu(businessId: number, menuName: string) {
+    return this.request(`/portal/menu/${businessId}/menus/${encodeURIComponent(menuName)}`, {
+      method: 'DELETE'
+    })
+  }
 
   // Get business type information
   async getBusinessInfo(businessId: number) {
@@ -883,6 +889,8 @@ class ApiClient {
     })
   }
 
+  
+
   // Convenience methods for organized access
   menu = {
     getConfig: (businessId: number, menuId?: string, menuName?: string, isActive?: boolean) => {
@@ -894,6 +902,8 @@ class ApiClient {
       const query = params.toString() ? `?${params.toString()}` : ''
       return this.request(`/portal/menu/${businessId}/config${query}`)
     },
+
+   
   
     saveConfig: (businessId: number, config: {
       config: any
@@ -911,6 +921,7 @@ class ApiClient {
     createItem: this.createMenuItem.bind(this),
     updateItem: this.updateMenuItem.bind(this),
     deleteItem: this.deleteMenuItem.bind(this),
+    deleteMenu: this.deleteMenu.bind(this),
     getBusinessInfo: this.getBusinessInfo.bind(this),
     uploadImage: (file: File, businessId: number) => this.uploadMenuImage(file, businessId),
     getPlaceTypeMappings: this.getPlaceTypeMappings.bind(this),
@@ -926,6 +937,12 @@ class ApiClient {
     deleteCategory: this.deleteMenuCategory.bind(this)
   }
 
+  async generateMenuQRCode(clientId: number, menuName: string) {
+    return this.request(`/portal/menu/${clientId}/qr-code`, {
+      method: "POST",
+      body: JSON.stringify({ menuName }),
+    })
+  }
 
 
 }

@@ -43,6 +43,7 @@ export interface SectionContent {
   
   export interface MenuItem {
     id: string
+    item_type: string
     data: {
       name: string
       price: number

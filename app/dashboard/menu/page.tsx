@@ -17,6 +17,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { SectionManager } from "@/lib/section-manager"
+import { useDebouncedCallback } from 'use-debounce'
+
 import { 
   Palette, 
   Layout, 
@@ -33,7 +36,8 @@ import {
   Trash2,
   AlertCircle,
   Edit,        
-  Upload as UploadIcon 
+  Upload as UploadIcon,
+  QrCode
 } from "lucide-react"
 
 // Import our custom components
@@ -46,6 +50,7 @@ import { MobilePreview } from "@/components/menu/MobilePreview"
 import { BusinessTypeDetector } from "@/components/menu/BusinessTypeDetector"
 import { formatDistanceToNow } from "date-fns"
 
+
 interface MenuConfig {
   layout_type: 'list' | 'grid'
   columns?: number
@@ -57,7 +62,7 @@ interface MenuConfig {
     card_elevation: number
     border_radius: number
   }
-  // ✅ FIXED: Add styling for Flutter compatibility
+  // Add styling for Flutter compatibility
   styling: {
     background_color: string
     card_color: string
@@ -158,6 +163,13 @@ export default function MenuManagementPage() {
   const [activeTab, setActiveTab] = useState('layout')
   const [showMobilePreview, setShowMobilePreview] = useState(false)
 
+  // duplicate menu 
+  const [isDuplicateDialogOpen, setIsDuplicateDialogOpen] = useState(false)
+  const [duplicateSourceMenu, setDuplicateSourceMenu] = useState<string>('')
+  const [duplicateMenuName, setDuplicateMenuName] = useState('')
+
+  const [sections, setSections] = useState<any[]>([])
+
   useEffect(() => {
     loadInitialData()
   }, [])
@@ -167,6 +179,12 @@ export default function MenuManagementPage() {
       loadMenuData(selectedMenu)
     }
   }, [selectedMenu])
+
+
+  const handleCategoriesChange = useCallback((newCategories: Category[]) => {
+    setCategories(newCategories)
+  }, [])
+
 
   const loadInitialData = async () => {
     setIsLoading(true)
@@ -208,16 +226,59 @@ export default function MenuManagementPage() {
     }
   }
 
+  const updateGridOccupancy = useCallback((currentSections: any[]) => {
+    // This function is actually only used in MenuLayoutDesigner
+    // For page.tsx, we just need a placeholder
+    console.log('Grid occupancy updated with', currentSections.length, 'sections')
+  }, [])
+  
+  // Auto-save with debouncing to prevent freezing
+  const debouncedSave = useDebouncedCallback(
+    async (configToSave: any) => {
+      try {
+        await apiClient.menu.saveConfig(businessId!, {
+          config: configToSave,
+          config_version: currentVersion,
+          menuName: selectedMenu,
+          is_draft: true,
+          is_published: false
+        })
+        console.log('🔄 Auto-saved configuration')
+        setIsDirty(false)
+      } catch (error) {
+        console.error('❌ Auto-save failed:', error)
+      }
+    },
+    500 // 500ms debounce
+  )
+
   const loadAvailableMenus = async () => {
     try {
       if (!businessId) return
   
       const allItems = await apiClient.menu.getItems(businessId)
       
+      // Let's see what we're getting from the API
+      console.log('🔍 RAW API RESPONSE - All items:', allItems)
+      console.log('🔍 First few items structure:', allItems.slice(0, 3))
+      console.log('🔍 Item types found:', [...new Set(allItems.map((item: any) => item.item_type))])
+      
+      // Filter out config items before processing
+      const nonConfigItems = allItems.filter((item: any) => {
+        console.log(`🔍 Item: ${item.data?.name || item.id} - Type: ${item.item_type}`)
+        return item.item_type !== 'config'  // Exclude config items
+      })
+      
+      console.log('✅ FILTERED ITEMS (non-config):', nonConfigItems)
+      console.log('✅ Non-config items count:', nonConfigItems.length)
+      
       const menuMap = new Map<string, MenuInfo>()
       
-      allItems.forEach((item: MenuItem) => {
+      // Use filtered items instead of allItems
+      nonConfigItems.forEach((item: any) => {
         const menuName = item.menu_name || 'Default Menu'
+        console.log(`📝 Processing item "${item.data?.name}" for menu "${menuName}"`)
+        
         if (!menuMap.has(menuName)) {
           menuMap.set(menuName, {
             name: menuName,
@@ -235,11 +296,13 @@ export default function MenuManagementPage() {
         }
       })
   
-      // ✅ FIXED: Get actual config is_active state for each menu
+      console.log('📊 FINAL MENU MAP:', Array.from(menuMap.entries()))
+  
+      // Get actual config is_active state for each menu
       for (const [menuName, menuInfo] of menuMap) {
         try {
           const configResponse = await apiClient.menu.getConfig(businessId!, undefined, menuName)
-          if (configResponse && configResponse.id) {
+          if (configResponse) {  // ✅ FIXED: Remove the && configResponse.id check
             menuInfo.config_is_active = configResponse.is_active
             menuInfo.is_published = configResponse.is_published
           }
@@ -262,11 +325,13 @@ export default function MenuManagementPage() {
       const menus = Array.from(menuMap.values())
       setAvailableMenus(menus)
       
-      console.log('✅ Available menus loaded:', menus)
+      console.log('✅ FINAL AVAILABLE MENUS:', menus)
     } catch (error) {
       console.error('Error loading available menus:', error)
     }
   }
+
+
 
   const loadMenuData = async (menuName: string) => {
     try {
@@ -299,7 +364,7 @@ export default function MenuManagementPage() {
     try {
       console.log(`🔧 Loading menu config for: ${menuName}`)
       
-      // ✅ FIXED: Get the actual config is_active state
+      // Get the actual config is_active state
       const currentMenu = availableMenus.find(m => m.name === menuName)
       const actualIsActive = currentMenu?.config_is_active ?? true
       
@@ -383,31 +448,37 @@ export default function MenuManagementPage() {
     }
   }
 
-  // ✅ FIXED: Use useCallback to prevent infinite re-renders and remove console.trace
   const handleConfigChange = useCallback((newConfig: Partial<MenuConfig>) => {
-    console.log('📝 Config change received:', newConfig)
-    console.log('📝 Current menuConfig before update:', menuConfig)
-    
-    if (menuConfig) {
-      const updatedConfig: MenuConfig = { 
-        ...menuConfig, 
-        ...newConfig,
-        // Ensure layout_type and columns are properly set
-        layout_type: newConfig.layout_type !== undefined ? newConfig.layout_type : menuConfig.layout_type,
-        columns: newConfig.columns !== undefined ? newConfig.columns : menuConfig.columns,
-        theme: newConfig.theme ? { ...menuConfig.theme, ...newConfig.theme } : menuConfig.theme,
-        sections: newConfig.sections !== undefined ? newConfig.sections : menuConfig.sections,
-        styling: newConfig.styling ? { ...menuConfig.styling, ...newConfig.styling } : menuConfig.styling,
-        selectedMenu: selectedMenu
-      }
-      
-      console.log('📝 Updated config being set:', updatedConfig)
-      setMenuConfig(updatedConfig)
-      setIsDirty(true)
+  console.log('📝 Config change received:', newConfig)
+  
+  if (menuConfig) {
+    const updatedConfig: MenuConfig = { 
+      ...menuConfig, 
+      ...newConfig,
+      layout_type: newConfig.layout_type !== undefined ? newConfig.layout_type : menuConfig.layout_type,
+      columns: newConfig.columns !== undefined ? newConfig.columns : menuConfig.columns,
+      theme: newConfig.theme ? { ...menuConfig.theme, ...newConfig.theme } : menuConfig.theme,
+      sections: newConfig.sections !== undefined ? newConfig.sections : menuConfig.sections,
+      styling: newConfig.styling ? { ...menuConfig.styling, ...newConfig.styling } : menuConfig.styling,
+      selectedMenu: selectedMenu
     }
-  }, [menuConfig, selectedMenu])
+    
+    setMenuConfig(updatedConfig)
+    setIsDirty(true)
 
-  // ✅ FIXED: Proper save draft function that actually saves
+    // ✅ SMART: Apply theme changes to existing sections without destroying them
+    if (newConfig.theme || newConfig.styling) {
+      const themedSections = SectionManager.applyThemeToSections(sections, newConfig.theme || newConfig.styling)
+      setSections(themedSections)
+      updateGridOccupancy(themedSections)
+    }
+
+    // Auto-save with debouncing
+    debouncedSave(updatedConfig)
+  }
+}, [menuConfig, selectedMenu, sections, updateGridOccupancy, debouncedSave])
+
+  // Proper save draft function that actually saves
   const handleSaveDraft = async () => {
     if (!menuConfig || !businessId) {
       toast({
@@ -449,7 +520,7 @@ export default function MenuManagementPage() {
     }
   }
 
-  // ✅ FIXED: Proper publish function that actually publishes
+  // Proper publish function that actually publishes
   const handlePublish = async () => {
     if (!menuConfig || !businessId) {
       toast({
@@ -566,8 +637,38 @@ export default function MenuManagementPage() {
     }
   }
 
-  const duplicateMenu = async (sourceMenuName: string) => {
-    const duplicateName = `${sourceMenuName} (Copy)`
+  const handleDuplicateClick = (sourceMenuName: string) => {
+    console.log(`🔄 Opening duplicate dialog for: ${sourceMenuName}`)
+    setDuplicateSourceMenu(sourceMenuName)
+    setDuplicateMenuName(`${sourceMenuName} (Copy)`)
+    setIsDuplicateDialogOpen(true)
+  }
+  
+  const executeDuplicateMenu = async () => {
+    const sourceMenuName = duplicateSourceMenu
+    const targetMenuName = duplicateMenuName.trim()
+    
+    console.log(`🔄 DUPLICATE DEBUG - Starting duplication...`)
+    console.log(`📋 Source menu: "${sourceMenuName}"`)
+    console.log(`📋 Target menu: "${targetMenuName}"`)
+    
+    if (!targetMenuName) {
+      toast({
+        title: "Name Required",
+        description: "Please enter a name for the duplicated menu.",
+        variant: "destructive"
+      })
+      return
+    }
+  
+    if (availableMenus.some(menu => menu.name === targetMenuName)) {
+      toast({
+        title: "Name Already Exists",
+        description: "A menu with this name already exists.",
+        variant: "destructive"
+      })
+      return
+    }
     
     if (!canCreateNewMenu()) {
       toast({
@@ -577,33 +678,115 @@ export default function MenuManagementPage() {
       })
       return
     }
-
+  
     try {
-      const sourceItems = menuItems.filter(item => 
-        (item.menu_name || 'Default Menu') === sourceMenuName
-      )
-
+      // Close modal first
+      setIsDuplicateDialogOpen(false)
+      
+      // STEP 1: Fetch ALL items from API
+      console.log(`🔍 Fetching all items from API...`)
+      const allItems = await apiClient.menu.getItems(businessId!)
+      
+      // STEP 2: Filter for source menu items AND exclude config items
+      const sourceItems = allItems.filter((item: any) => {
+        const isFromSourceMenu = (item.menu_name || 'Default Menu') === sourceMenuName
+        const isNotConfig = item.item_type !== 'config' && 
+                           item.menu_name !== 'config' && 
+                           !item.data?.name?.includes('Configuration')
+        
+        console.log(`🔍 Item "${item.data?.name}": menu=${item.menu_name}, type=${item.item_type}, isFromSource=${isFromSourceMenu}, isNotConfig=${isNotConfig}`)
+        
+        return isFromSourceMenu && isNotConfig
+      })
+  
+      console.log(`🔍 Items found in source menu "${sourceMenuName}" (excluding config):`, sourceItems.length)
+  
+      if (sourceItems.length === 0) {
+        console.log(`⚠️ Source menu "${sourceMenuName}" has no non-config items to duplicate`)
+        toast({
+          title: "No Items to Duplicate",
+          description: `The menu "${sourceMenuName}" has no items to duplicate.`,
+          variant: "destructive"
+        })
+        return
+      }
+  
+      // STEP 3: Get the source menu's configuration SEPARATELY
+      console.log(`🔧 Fetching configuration for source menu "${sourceMenuName}"...`)
+      let sourceConfig = null
+      try {
+        sourceConfig = await apiClient.menu.getConfig(businessId!, undefined, sourceMenuName)
+        console.log(`✅ Source menu config found:`, sourceConfig ? 'Yes' : 'No')
+      } catch (configError) {
+        console.log(`⚠️ No config found for source menu, will use default`)
+      }
+  
+      // STEP 4: Duplicate only the actual menu items (not config items)
+      console.log(`🚀 Starting duplication of ${sourceItems.length} items...`)
+  
       for (const item of sourceItems) {
+        console.log(`📝 Duplicating item: ${item.data.name} (type: ${item.item_type})`)
+        
         const duplicatedItem = {
-          item_type: businessInfo?.item_type || 'food',
+          item_type: item.item_type, // Preserve original item_type
           data: {
             ...item.data,
-            name: item.data.name
+            name: item.data.name // Keep original name
           },
-          menu_name: duplicateName
+          menu_name: targetMenuName,
+          category_id: item.category_id
         }
-        await apiClient.menu.createItem(businessId!, duplicatedItem)
+  
+        console.log(`📤 Creating item with preserved type: ${duplicatedItem.item_type}`)
+  
+        try {
+          const result = await apiClient.menu.createItem(businessId!, duplicatedItem)
+          console.log(`✅ Item created successfully:`, result.id)
+        } catch (itemError) {
+          console.error(`❌ Failed to create item "${item.data.name}":`, itemError)
+          throw itemError
+        }
       }
-
+  
+      // STEP 5: Duplicate the menu configuration if it exists
+      if (sourceConfig && sourceConfig.id && sourceConfig.config) {
+        console.log(`🔧 Duplicating menu configuration...`)
+        
+        try {
+          const configToDuplicate = {
+            config: {
+              ...sourceConfig.config,
+              selectedMenu: targetMenuName // Update the selected menu name in config
+            },
+            config_version: sourceConfig.config_version || 'v1.0.0',
+            menuName: targetMenuName,
+            is_draft: true, // New duplicated menu should be a draft
+            is_published: false // Not published initially
+          }
+  
+          const configResult = await apiClient.menu.saveConfig(businessId!, configToDuplicate)
+          console.log(`✅ Menu configuration duplicated successfully:`, configResult)
+          
+        } catch (configError) {
+          console.error(`❌ Failed to duplicate menu configuration:`, configError)
+          console.log(`⚠️ Items duplicated successfully, but config duplication failed`)
+        }
+      } else {
+        console.log(`📝 No configuration to duplicate for "${sourceMenuName}"`)
+      }
+  
+      console.log(`✅ All items duplicated, reloading menus...`)
       await loadAvailableMenus()
-      setSelectedMenu(duplicateName)
+      setSelectedMenu(targetMenuName)
       
       toast({
         title: "Menu Duplicated",
-        description: `${duplicateName} created with ${sourceItems.length} items.`,
+        description: `${targetMenuName} created with ${sourceItems.length} items${sourceConfig?.id ? ' and configuration' : ''}.`,
       })
+      
+      console.log(`✅ Duplication completed successfully`)
     } catch (error) {
-      console.error('Error duplicating menu:', error)
+      console.error('❌ Error duplicating menu:', error)
       toast({
         title: "Duplication Failed",
         description: "Failed to duplicate menu. Please try again.",
@@ -612,48 +795,87 @@ export default function MenuManagementPage() {
     }
   }
 
-  const deleteMenu = async (menuName: string) => {
-    if (availableMenus.length <= 1) {
-      toast({
-        title: "Cannot Delete",
-        description: "You must have at least one menu.",
-        variant: "destructive"
-      })
-      return
+  
+const deleteMenu = async (menuName: string) => {
+  console.log(`🗑️ Deleting menu: ${menuName}`)
+  
+  if (availableMenus.length <= 1) {
+    toast({
+      title: "Cannot Delete",
+      description: "You must have at least one menu.",
+      variant: "destructive"
+    })
+    return
+  }
+
+  try {
+    // Use the new dedicated menu deletion endpoint
+    const result = await apiClient.menu.deleteMenu(businessId!, menuName)
+    
+    console.log(`✅ Menu deletion result:`, result)
+    
+    // Reload the available menus list
+    await loadAvailableMenus()
+    
+    // If we deleted the currently selected menu, switch to another one
+    if (selectedMenu === menuName) {
+      const remainingMenus = availableMenus.filter(m => m.name !== menuName)
+      if (remainingMenus.length > 0) {
+        setSelectedMenu(remainingMenus[0].name)
+      }
     }
+    
+    toast({
+      title: "Menu Deleted",
+      description: `${menuName} and all its items have been deleted successfully.`,
+    })
+    
 
+  } catch (error) {
+    console.error('❌ Error deleting menu:', error)
+    toast({
+      title: "Deletion Failed",
+      description: "Failed to delete menu. Please try again.",
+      variant: "destructive"
+    })
+  }
+}
+
+
+
+  const generateMenuQR = async (menuName: string) => {
     try {
-      const menuSpecificItems = menuItems.filter(item => 
-        (item.menu_name || 'Default Menu') === menuName
-      )
-
-      for (const item of menuSpecificItems) {
-        await apiClient.menu.deleteItem(businessId!, item.id)
-      }
-
-      await loadAvailableMenus()
+      const result = await apiClient.generateMenuQRCode(businessId!, menuName)
       
-      if (selectedMenu === menuName) {
-        const remainingMenus = availableMenus.filter(m => m.name !== menuName)
-        if (remainingMenus.length > 0) {
-          setSelectedMenu(remainingMenus[0].name)
-        }
+      if (result.success) {
+        // Show QR modal or download directly
+        downloadQRCode(result.data.qrCodeDataURL, `${menuName}_QR_Code.png`)
+        
+        toast({
+          title: "QR Code Generated",
+          description: `QR code for ${menuName} is ready for download.`,
+        })
       }
-      
-      toast({
-        title: "Menu Deleted",
-        description: `${menuName} has been deleted.`,
-      })
     } catch (error) {
-      console.error('Error deleting menu:', error)
       toast({
-        title: "Deletion Failed",
-        description: "Failed to delete menu. Please try again.",
+        title: "QR Generation Failed",
+        description: "Failed to generate QR code. Please try again.",
         variant: "destructive"
       })
     }
   }
+  
+  const downloadQRCode = (dataURL: string, filename: string) => {
+    const link = document.createElement('a')
+    link.download = filename
+    link.href = dataURL
+    link.click()
+  }
 
+
+
+
+  
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -838,13 +1060,25 @@ export default function MenuManagementPage() {
                                 {isSaving ? 'Saving...' : 'Save Draft'}
                               </Button>
                             )}
+
                           </>
                         )}
+
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => generateMenuQR(menu.name)}
+                          className="flex items-center gap-1"
+                        >
+                          <QrCode className="h-4 w-4" />
+                          QR Code
+                         </Button>
                         
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => duplicateMenu(menu.name)}
+                          onClick={() => handleDuplicateClick(menu.name)}
                           disabled={!canCreateNewMenu()}
                           className="flex items-center gap-1"
                         >
@@ -893,7 +1127,23 @@ export default function MenuManagementPage() {
                               Delete
                             </Button>
                           </AlertDialogTrigger>
-                          {/* AlertDialog content stays the same */}
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Menu</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{menu.name}"? This action cannot be undone and will remove all items in this menu.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => deleteMenu(menu.name)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Yes, Delete Menu
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
                         </AlertDialog>
                       </div>
                     </td>
@@ -974,6 +1224,19 @@ export default function MenuManagementPage() {
                 <ThemeCustomizer 
                   config={menuConfig}
                   onChange={handleConfigChange}
+                  onSaveConfig={async (config) => {
+                    try {
+                      await apiClient.menu.saveConfig(businessId!, {
+                        config: config,
+                        config_version: currentVersion,
+                        menuName: selectedMenu
+                      })
+                      console.log('✅ Theme config saved successfully')
+                    } catch (error) {
+                      console.error('❌ Error saving theme config:', error)
+                      throw error
+                    }
+                  }}
                 />
               </TabsContent>
 
@@ -982,7 +1245,7 @@ export default function MenuManagementPage() {
                   categories={categories}
                   businessType={businessInfo?.item_type || 'food'}
                   businessId={businessId || 1}
-                  onChange={(newCategories: Category[]) => setCategories(newCategories)}
+                  onChange={handleCategoriesChange}
                 />
               </TabsContent>
 
@@ -1036,6 +1299,41 @@ export default function MenuManagementPage() {
       <BusinessTypeDetector 
         onBusinessTypeDetected={(info: BusinessInfo) => setBusinessInfo(info)}
       />
+
+
+      {/* Duplicate Menu Dialog */}
+      <Dialog open={isDuplicateDialogOpen} onOpenChange={setIsDuplicateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicate Menu</DialogTitle>
+            <DialogDescription>
+              Create a copy of "{duplicateSourceMenu}" with a new name. All items and configuration will be copied.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="duplicate-menu-name">New Menu Name</Label>
+              <Input
+                id="duplicate-menu-name"
+                value={duplicateMenuName}
+                onChange={(e) => setDuplicateMenuName(e.target.value)}
+                placeholder="Enter menu name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDuplicateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={executeDuplicateMenu}>
+              Duplicate Menu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+
     </div>
   )
 }

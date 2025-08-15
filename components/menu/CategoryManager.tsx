@@ -93,10 +93,17 @@ const BUSINESS_TYPE_LABELS = {
 }
 
 export function CategoryManager({ categories, businessType, businessId, onChange }: CategoryManagerProps) {
+  console.log('🔄 CategoryManager render:', {
+    categoriesLength: categories.length,
+    businessId,
+    categoriesHash: JSON.stringify(categories.map(c => c.id))
+  })
+  
   const { toast } = useToast()
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [newCategory, setNewCategory] = useState({
     name: '',
     description: '',
@@ -440,10 +447,13 @@ export function CategoryManager({ categories, businessType, businessId, onChange
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditingCategory(category)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+  console.log('🚨 EDIT CLICKED for category:', category.id)
+  setEditingCategory(category)
+}}>
+  <Edit className="h-4 w-4 mr-2" />
+  Edit
+</DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => updateCategory(category.id, { is_active: !category.is_active })}
                         >
@@ -475,77 +485,56 @@ export function CategoryManager({ categories, businessType, businessId, onChange
         </CardContent>
       </Card>
 
-      {/* Edit Category Dialog */}
-      {editingCategory && (
-        <Dialog open={!!editingCategory} onOpenChange={(open) => {
-          if (!open) setEditingCategory(null)
-        }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Category</DialogTitle>
-              <DialogDescription>
-                Modify the category details
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="edit-category-name">Category Name</Label>
-                <Input
-                  id="edit-category-name"
-                  value={editingCategory.name}
-                  onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-category-description">Description</Label>
-                <Textarea
-                  id="edit-category-description"
-                  value={editingCategory.description || ''}
-                  onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-category-color">Category Color</Label>
-                  <div className="flex items-center gap-2 mt-1">
-                    <input
-                      type="color"
-                      value={editingCategory.color || '#3b82f6'}
-                      onChange={(e) => setEditingCategory({ ...editingCategory, color: e.target.value })}
-                      className="w-8 h-8 rounded border cursor-pointer"
-                    />
-                    <Input
-                      value={editingCategory.color || '#3b82f6'}
-                      onChange={(e) => setEditingCategory({ ...editingCategory, color: e.target.value })}
-                      className="font-mono text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="edit-category-icon">Icon (Emoji)</Label>
-                  <Input
-                    id="edit-category-icon"
-                    value={editingCategory.icon || ''}
-                    onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })}
-                    className="text-center"
-                  />
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingCategory(null)}>
-                Cancel
-              </Button>
-              <Button onClick={() => {
-                updateCategory(editingCategory.id, editingCategory)
-                setEditingCategory(null)
-              }}>
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+     {/* Custom Edit Modal */}
+{editingCategory && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <h3 className="text-lg font-semibold mb-4">Edit Category</h3>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Category Name</label>
+          <input
+            type="text"
+            value={editingCategory.name}
+            onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+            className="w-full border rounded px-3 py-2"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium mb-1">Description</label>
+          <textarea
+            value={editingCategory.description || ''}
+            onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
+            className="w-full border rounded px-3 py-2"
+            rows={3}
+          />
+        </div>
+      </div>
+      
+      <div className="flex justify-end gap-2 mt-6">
+       <button
+          onClick={() => {
+            setEditingCategory(null)
+          }}
+          className="px-4 py-2 border rounded hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            updateCategory(editingCategory.id, editingCategory)
+            setEditingCategory(null)
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Category Statistics */}
       {categories.length > 0 && (
