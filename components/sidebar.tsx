@@ -1,64 +1,51 @@
-// File: components/sidebar.tsx
+// Path: /components/sidebar.tsx (Updated)
+// Name: Updated Sidebar Component with GladMenu Admin Option
+
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/app/providers"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   LayoutDashboard,
   MessageSquare,
   BarChart3,
   Users,
   Settings,
-  ShieldCheck,
-  ImageIcon,
   HelpCircle,
   User,
-  Crown,
-  Database,
+  TrendingUp,
   Building,
   Heart,
-  TrendingUp,
+  Database,
+  ShieldCheck,
+  ImageIcon,
+  Utensils, // NEW: Menu icon
+  Menu // NEW: Alternative menu icon
 } from "lucide-react"
-import { useState, useEffect } from "react"
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { role, clientRole, user } = useAuth()
+  const { user, role, clientRole } = useAuth()
   const [hasClientAccess, setHasClientAccess] = useState(false)
 
-  // Check client access for GladGrade employees
   useEffect(() => {
-    const checkClientAccess = async () => {
-      // Super admin and admin always have client access
-      if (role === "super_admin" || role === "admin") {
-        setHasClientAccess(true)
-        return
-      }
-      
-      // Check for employees
-      if (role === "employee" && user?.email) {
+    async function checkClientAccess() {
+      if (role && role !== "client" && user?.email) {
         try {
-          const response = await fetch("/api/user-access", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              email: user.email  // Only send email, not Firebase UID
-            })
+          const response = await fetch('/api/check-client-access', {
+            headers: {
+              'Authorization': `Bearer ${await user.getIdToken()}`,
+            },
           })
-          
           if (response.ok) {
-            const data = await response.json()
-            setHasClientAccess(data.hasClientAccess || false)
-            
-            console.log("Client access check:", {
-              isEmployee: data.isEmployee,
-              hasAccess: data.hasClientAccess,
-              userInfo: data.userInfo
-            })
+            setHasClientAccess(true)
           } else {
-            console.error("Failed to check client access:", response.statusText)
+            console.error("Client access check failed:", response.statusText)
             setHasClientAccess(false)
           }
         } catch (error) {
@@ -129,13 +116,6 @@ export function Sidebar() {
       roles: ["super_admin", "admin"],
       employeeOnly: true,
     },
-    {
-      name: "Settings",
-      href: "/dashboard/settings",
-      icon: Settings,
-      roles: ["super_admin", "admin"],
-      employeeOnly: true,
-    },
     
     // === SHARED SECTIONS (Both employees and clients) ===
     {
@@ -162,6 +142,17 @@ export function Sidebar() {
       roles: ["client"],
       clientRoles: ["client_admin"], // Only client admins can manage team
       clientOnly: true,
+    },
+    
+    // === NEW: GLADMENU ADMIN SECTION ===
+    {
+      name: "GladMenu Admin",
+      href: "/dashboard/menu",
+      icon: Utensils,
+      roles: ["super_admin", "admin", "client", "employee"],
+      clientRoles: ["client_admin"], // Only client admins can manage menu
+      description: "Manage your menu, services, or inventory",
+      isNew: true, // Flag to show "NEW" badge
     },
     
     // === UNIVERSAL SECTIONS (Everyone) ===
@@ -230,10 +221,13 @@ export function Sidebar() {
         return { text: "Moderator", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" }
       case "client":
         // Show specific client role
-        const clientRoleText = clientRole ? 
-          clientRole.replace('client_', '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : 
-          'Client'
-        return { text: clientRoleText, className: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" }
+        const clientRoleText = clientRole 
+          ? clientRole.replace('client_', '').replace('_', ' ')
+          : 'Client'
+        return { 
+          text: clientRoleText.charAt(0).toUpperCase() + clientRoleText.slice(1), 
+          className: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" 
+        }
       default:
         return { text: "User", className: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" }
     }
@@ -242,51 +236,70 @@ export function Sidebar() {
   const roleBadge = getRoleBadgeInfo()
 
   return (
-    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-card border-r border-border sidebar-scrollbar overflow-y-auto">
-      <div className="p-4">
-        {/* User Info */}
-        <div className="flex items-center gap-3 mb-6 p-3 bg-muted rounded-lg">
-          <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <User className="h-5 w-5 text-primary" />
+    <div className="pb-12 w-64 bg-background border-r border-border">
+      <div className="space-y-4 py-4">
+        <div className="px-3 py-2">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold tracking-tight">Navigation</h2>
+            <Badge 
+              variant="outline" 
+              className={cn("text-xs", roleBadge.className)}
+            >
+              {roleBadge.text}
+            </Badge>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {user?.email || "User"}
-            </p>
-            <div className="flex items-center gap-1 mt-1">
-              <div className={cn("px-2 py-0.5 rounded text-xs font-medium", roleBadge.className)}>
-                {roleBadge.text}
+          <div className="space-y-1">
+            {filteredNavigation.map((item) => {
+              const Icon = item.icon
+              const isActive = pathname === item.href || 
+                             (item.href !== "/dashboard" && pathname.startsWith(item.href))
+              
+              return (
+                <Link key={item.href} href={item.href}>
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start gap-2",
+                      isActive && "bg-muted font-medium"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="flex-1 text-left">{item.name}</span>
+                    
+                    {/* NEW: Show badge for new features */}
+                    {item.isNew && (
+                      <Badge 
+                        variant="secondary" 
+                        className="ml-auto text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
+                      >
+                        NEW
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+        
+        {/* User Info Section */}
+        <div className="px-3">
+          <div className="rounded-lg bg-muted/50 p-3">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="h-4 w-4 text-primary" />
               </div>
-              {role === "super_admin" && (
-                <Crown className="h-3 w-3 text-primary" />
-              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {user?.email || "Demo User"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {roleBadge.text}
+                </p>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Navigation */}
-        <nav className="space-y-2">
-          {filteredNavigation.map((item) => {
-            const isActive = pathname === item.href
-            const Icon = item.icon
-
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{item.name}</span>
-              </Link>
-            )
-          })}
-        </nav>
       </div>
     </div>
   )

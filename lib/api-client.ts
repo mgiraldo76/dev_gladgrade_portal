@@ -552,73 +552,73 @@ class ApiClient {
 
 
 
-// Client locations methods - ADD MISSING UPDATE AND DELETE
-async updateClientLocation(clientId: number, locationId: number, location: {
-  location_name?: string
-  address?: string
-  city?: string
-  state?: string
-  postal_code?: string
-  country?: string
-  place_id?: string
-  is_primary?: boolean
-  phone?: string
-  manager_name?: string
-  manager_email?: string
-  operating_hours?: string
-}) {
-  return this.request(`/portal/clients/${clientId}/locations/${locationId}`, {
-    method: "PUT",
-    body: JSON.stringify(location),
-  })
-}
+  // Client locations methods - ADD MISSING UPDATE AND DELETE
+  async updateClientLocation(clientId: number, locationId: number, location: {
+    location_name?: string
+    address?: string
+    city?: string
+    state?: string
+    postal_code?: string
+    country?: string
+    place_id?: string
+    is_primary?: boolean
+    phone?: string
+    manager_name?: string
+    manager_email?: string
+    operating_hours?: string
+  }) {
+    return this.request(`/portal/clients/${clientId}/locations/${locationId}`, {
+      method: "PUT",
+      body: JSON.stringify(location),
+    })
+  }
 
-async deleteClientLocation(clientId: number, locationId: number) {
-  return this.request(`/portal/clients/${clientId}/locations/${locationId}`, {
-    method: "DELETE",
-  })
-}
+  async deleteClientLocation(clientId: number, locationId: number) {
+    return this.request(`/portal/clients/${clientId}/locations/${locationId}`, {
+      method: "DELETE",
+    })
+  }
 
-// Client users methods - ADD MISSING UPDATE AND DELETE
-async updateClientUser(clientId: number, userId: number, user: {
-  email?: string
-  full_name?: string
-  role?: string
-  status?: string
-  reset_password?: boolean
-  new_password?: string
-}) {
-  return this.request(`/portal/clients/${clientId}/users/${userId}`, {
-    method: "PUT",
-    body: JSON.stringify(user),
-  })
-}
+  // Client users methods - ADD MISSING UPDATE AND DELETE
+  async updateClientUser(clientId: number, userId: number, user: {
+    email?: string
+    full_name?: string
+    role?: string
+    status?: string
+    reset_password?: boolean
+    new_password?: string
+  }) {
+    return this.request(`/portal/clients/${clientId}/users/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify(user),
+    })
+  }
 
-async deleteClientUser(clientId: number, userId: number) {
-  return this.request(`/portal/clients/${clientId}/users/${userId}`, {
-    method: "DELETE",
-  })
-}
+  async deleteClientUser(clientId: number, userId: number) {
+    return this.request(`/portal/clients/${clientId}/users/${userId}`, {
+      method: "DELETE",
+    })
+  }
 
-// Client activities methods - ADD NEW ACTIVITY METHODS
-async getClientActivities(clientId: number) {
-  return this.request(`/portal/clients/${clientId}/activities`)
-}
+  // Client activities methods - ADD NEW ACTIVITY METHODS
+  async getClientActivities(clientId: number) {
+    return this.request(`/portal/clients/${clientId}/activities`)
+  }
 
-async createClientActivity(clientId: number, activity: {
-  activity_type: string
-  subject: string
-  description?: string
-  outcome?: string
-  next_action?: string
-  priority?: string
-  scheduled_for?: string
-}) {
-  return this.request(`/portal/clients/${clientId}/activities`, {
-    method: "POST",
-    body: JSON.stringify(activity),
-  })
-}
+  async createClientActivity(clientId: number, activity: {
+    activity_type: string
+    subject: string
+    description?: string
+    outcome?: string
+    next_action?: string
+    priority?: string
+    scheduled_for?: string
+  }) {
+    return this.request(`/portal/clients/${clientId}/activities`, {
+      method: "POST",
+      body: JSON.stringify(activity),
+    })
+  }
 
 
 
@@ -645,6 +645,310 @@ async createClientActivity(clientId: number, activity: {
     getProspectActivities: this.getProspectActivities.bind(this),
     createProspectActivity: this.createProspectActivity.bind(this)
   }
+
+
+
+
+  // ===== MENU MANAGEMENT API METHODS =====
+
+  // Get menu configuration for a business
+  async getMenuConfig(businessId: number, menuId?: string, menuName?: string) {
+    const params = new URLSearchParams()
+    if (menuId) params.append('menuId', menuId)
+    if (menuName) params.append('menuName', menuName)
+    
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.request(`/portal/menu/${businessId}/config${query}`)
+  }
+
+  // Get all menus for a business
+  async getBusinessMenus(businessId: number) {
+    return this.request(`/portal/menu/${businessId}/menus`)
+  }
+
+  // Publish a specific menu
+  async publishMenu(businessId: number, menuName: string) {
+    return this.request(`/portal/menu/${businessId}/menus/${encodeURIComponent(menuName)}/publish`, {
+      method: 'POST'
+    })
+  }
+
+  // Save menu configuration (draft or publish)
+  async saveMenuConfig(businessId: number, config: {
+    config: any
+    config_version?: string
+    menuName?: string
+    is_draft?: boolean
+    is_published?: boolean
+  }) {
+    return this.request(`/portal/menu/${businessId}/config`, {
+      method: 'POST',
+      body: JSON.stringify(config)
+    })
+  }
+
+  // Get menu items for a business
+  async getMenuItems(businessId: number, params?: {
+    category_id?: string
+    active_only?: boolean
+  }) {
+    const queryParams = new URLSearchParams()
+    if (params?.category_id) queryParams.append('category_id', params.category_id)
+    if (params?.active_only !== undefined) queryParams.append('active_only', params.active_only.toString())
+    
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : ''
+    return this.request(`/portal/menu/${businessId}/items${query}`)
+  }
+
+  // Create menu item
+  async createMenuItem(businessId: number, item: {
+    item_type: string
+    data: {
+      name: string
+      price: number
+      description: string
+      image_url?: string
+      category?: string
+      year?: string | number
+      mileage?: string | number
+      duration?: string | number
+      sku?: string
+      [key: string]: any
+    }
+    category_id?: string
+    menu_name?: string
+  }) {
+    return this.request(`/portal/menu/${businessId}/items`, {
+      method: 'POST',
+      body: JSON.stringify(item)
+    })
+  }
+
+  // Update menu item
+  async updateMenuItem(businessId: number, itemId: string, updates: {
+    data?: any
+    is_active?: boolean
+    category_id?: string
+    menu_name?: string
+  }) {
+    return this.request(`/portal/menu/${businessId}/items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    })
+  }
+
+  // Delete menu item
+  async deleteMenuItem(businessId: number, itemId: string) {
+    return this.request(`/portal/menu/${businessId}/items/${itemId}`, {
+      method: 'DELETE'
+    })
+  }
+  // Delete entire menu and all its items
+  async deleteMenu(businessId: number, menuName: string) {
+    return this.request(`/portal/menu/${businessId}/menus/${encodeURIComponent(menuName)}`, {
+      method: 'DELETE'
+    })
+  }
+
+  // Get business type information
+  async getBusinessInfo(businessId: number) {
+    return this.request(`/portal/menu/${businessId}/business-info`)
+  }
+
+  /*
+  // Get menu version history
+  async getMenuHistory(businessId: number) {
+    return this.gcRequest(`/portal/menu/${businessId}/history`)
+  }
+
+  // Save menu version to history
+  async saveMenuVersion(businessId: number, version: {
+    version_name: string
+    config_snapshot: any
+    items_snapshot?: any[]
+    created_by_business_client_id?: number
+  }) {
+    return this.gcRequest(`/portal/menu/${businessId}/history`, {
+      method: 'POST',
+      body: JSON.stringify(version)
+    })
+  }
+
+  // Publish a menu version
+  async publishMenuVersion(businessId: number, versionId: string) {
+    return this.gcRequest(`/portal/menu/${businessId}/history/${versionId}/publish`, {
+      method: 'POST'
+    })
+  }
+  */
+
+
+
+  // Upload menu item image
+  async uploadMenuImage(file: File, businessId: number) {
+
+    try {
+      if (!businessId) {
+        throw new Error('Business ID is required for image upload')
+      }
+      console.log("📸 Starting image upload process...");
+      console.log("📁 File details:", { name: file.name, size: file.size, type: file.type });
+
+      // Check if we're in a browser environment and have auth
+      if (typeof window === 'undefined') {
+        throw new Error('Image uploads can only be made from browser environment')
+      }
+
+      // Get Firebase auth token
+      const auth = getAuth()
+      const user = auth.currentUser
+      
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+
+      const token = await user.getIdToken()
+      console.log("🎫 Got Firebase auth token");
+
+      // Create FormData
+      const formData = new FormData()
+      formData.append('image', file)
+      console.log("📦 FormData created with image");
+
+      // FIXED: Use the same URL construction as other gcRequest methods
+      const baseUrl = this.baseUrl || process.env.NEXT_PUBLIC_API_URL || ""
+      const url = `${baseUrl}/api/portal/menu/${businessId}/upload-image`
+
+      
+      console.log("🌐 Upload URL:", url);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+          // Note: Don't set Content-Type header for FormData - let browser set it
+        },
+        body: formData
+      })
+
+      console.log("📡 Upload response status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Upload failed with response:", errorText);
+        throw new Error(`Upload failed: ${response.statusText} - ${errorText}`)
+      }
+
+      const data = await response.json()
+      console.log("✅ Upload successful:", data);
+
+      if (!data.success || !data.image_url) {
+        throw new Error('Invalid response from upload API')
+      }
+
+      return data
+    } catch (error) {
+      console.error("❌ Image upload error:", error)
+      throw error
+    }
+  }
+
+  // Get place type mappings
+  async getPlaceTypeMappings() {
+    return this.gcRequest('/portal/menu/place-type-mappings')
+  }
+
+  async getClientServices(clientId: number) {
+    return this.request(`/portal/clients/${clientId}/services`)
+  }
+
+  
+  
+  // Category API methods
+  async getMenuCategories(businessId: number) {
+    return this.request(`/portal/menu/${businessId}/item_categories`)
+  }
+
+  async createMenuCategory(businessId: number, category: any) {
+    return this.request(`/portal/menu/${businessId}/item_categories`, {
+      method: 'POST',
+      body: JSON.stringify(category)
+    })
+  }
+
+  async updateMenuCategory(businessId: number, categoryId: string, updates: any) {
+    return this.request(`/portal/menu/${businessId}/item_categories/${categoryId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    })
+  }
+
+  async deleteMenuCategory(businessId: number, categoryId: string) {
+    return this.request(`/portal/menu/${businessId}/item_categories/${categoryId}`, {
+      method: 'DELETE'
+    })
+  }
+
+  
+
+  // Convenience methods for organized access
+  menu = {
+    getConfig: (businessId: number, menuId?: string, menuName?: string, isActive?: boolean) => {
+      const params = new URLSearchParams()
+      if (menuId) params.append('menuId', menuId)
+      if (menuName) params.append('menuName', menuName)
+      if (isActive !== undefined) params.append('isActive', isActive.toString())
+      
+      const query = params.toString() ? `?${params.toString()}` : ''
+      return this.request(`/portal/menu/${businessId}/config${query}`)
+    },
+
+   
+  
+    saveConfig: (businessId: number, config: {
+      config: any
+      config_version?: string
+      menuName?: string
+      is_draft?: boolean
+      is_published?: boolean
+    }) => {
+      return this.request(`/portal/menu/${businessId}/config`, {
+        method: 'POST',
+        body: JSON.stringify(config)
+      })
+    },
+    getItems: this.getMenuItems.bind(this),
+    createItem: this.createMenuItem.bind(this),
+    updateItem: this.updateMenuItem.bind(this),
+    deleteItem: this.deleteMenuItem.bind(this),
+    deleteMenu: this.deleteMenu.bind(this),
+    getBusinessInfo: this.getBusinessInfo.bind(this),
+    uploadImage: (file: File, businessId: number) => this.uploadMenuImage(file, businessId),
+    getPlaceTypeMappings: this.getPlaceTypeMappings.bind(this),
+    getMenus: this.getBusinessMenus.bind(this),
+    publishMenu: (businessId: number, menuName: string) => {
+      return this.request(`/portal/menu/${businessId}/menus/${encodeURIComponent(menuName)}/publish`, {
+        method: 'POST'
+      })
+    },
+    getCategories: this.getMenuCategories.bind(this),
+    createCategory: this.createMenuCategory.bind(this),
+    updateCategory: this.updateMenuCategory.bind(this),
+    deleteCategory: this.deleteMenuCategory.bind(this)
+  }
+
+  async generateMenuQRCode(clientId: number, menuName: string) {
+    return this.request(`/portal/menu/${clientId}/qr-code`, {
+      method: "POST",
+      body: JSON.stringify({ menuName }),
+    })
+  }
+
+
 }
+
+
+
+
 
 export const apiClient = new ApiClient()
