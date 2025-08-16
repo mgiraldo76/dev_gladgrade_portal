@@ -137,7 +137,7 @@ export function Sidebar() {
     },
     {
       name: "Team Management",
-      href: "/dashboard/team",
+      href: "/dashboard/clients/team",
       icon: Users,
       roles: ["client"],
       clientRoles: ["client_admin"], // Only client admins can manage team
