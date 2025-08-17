@@ -1,295 +1,640 @@
+// File: app/claim-business/page.tsx
+// Path: app/claim-business/page.tsx
+
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import React, { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { CheckCircle, Building, Shield, Clock, ArrowRight, Star } from "lucide-react"
+import { Logo } from "@/components/logo"
+import { ArrowLeft, Upload, Building2, CheckCircle, AlertTriangle, Loader2, X } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+interface IndustryCategory {
+  id: number
+  name: string
+  description?: string
+  icon?: string
+}
+
+interface UploadedFile {
+  file: File
+  preview?: string
+  uploading?: boolean
+  error?: string
+}
 
 export default function ClaimBusinessPage() {
-  const [step, setStep] = useState(1)
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [claimResult, setClaimResult] = useState<any>(null)
-
+  const [categories, setCategories] = useState<IndustryCategory[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [formStartTime] = useState(Date.now())
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState(false)
+  
   const [formData, setFormData] = useState({
     business_name: "",
     contact_name: "",
     contact_email: "",
     phone: "",
-    business_address: "",
+    admin_phone: "",
     website: "",
+    business_address: "",
     industry_category_id: "",
-    claim_method: "email_domain",
+    fein: "",
+    dun_bradstreet_id: ""
   })
 
-  const industryCategories = [
-    { id: 1, name: "Restaurant & Food", icon: "🍽️" },
-    { id: 2, name: "Retail", icon: "🛍️" },
-    { id: 3, name: "Healthcare", icon: "🏥" },
-    { id: 4, name: "Education", icon: "🎓" },
-    { id: 5, name: "Entertainment", icon: "🎭" },
-    { id: 6, name: "Professional Services", icon: "💼" },
-    { id: 7, name: "Beauty & Wellness", icon: "💅" },
-    { id: 8, name: "Automotive", icon: "🚗" },
-    { id: 9, name: "Hospitality", icon: "🏨" },
-    { id: 10, name: "Technology", icon: "💻" },
-    { id: 11, name: "Home Services", icon: "🏠" },
-    { id: 12, name: "Financial Services", icon: "💰" },
-  ]
+  // Load industry categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        // console.log("🔐 Authenticating for categories...")
+        
+        // Sign in with dummy account
+        const { signInWithEmailAndPassword } = await import('firebase/auth')
+        const { auth } = await import('@/services/firebase')
+        
+        if (!auth) {
+          throw new Error('Firebase not configured')
+        }
+
+        await signInWithEmailAndPassword(
+          auth, 
+          'public_business_claim@gladgrade.com',
+          'thisisbusinessclaimpublicuserpassw0rd!'
+        )
+        
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'https://gladgrade-api-360532994710.us-east4.run.app'}/api/portal/sales/businessclaim_categories`,
+          {
+            headers: {
+              'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
+            }
+          }
+        )
+        const data = await response.json()
+        
+        if (data.success) {
+          setCategories(data.data)
+        } else {
+          console.error("Failed to load categories:", data.error)
+        }
+        
+        // Sign out after loading categories
+        await auth.signOut()
+        
+      } catch (error) {
+        console.error("Error loading categories:", error)
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+
+    fetchCategories()
+  }, [])
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+    setError("") // Clear errors when user starts typing
+  }
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    
+    const newFiles: UploadedFile[] = []
+    
+    files.forEach(file => {
+      if (!allowedTypes.includes(file.type)) {
+        setError(`Invalid file type: ${file.name}. Allowed: PDF, JPG, PNG, DOC, DOCX`)
+        return
+      }
+      
+      if (file.size > maxSize) {
+        setError(`File too large: ${file.name}. Maximum size: 10MB`)
+        return
+      }
+      
+      newFiles.push({ file })
+    })
+    
+    if (uploadedFiles.length + newFiles.length > 10) {
+      setError("Maximum 10 files allowed")
+      return
+    }
+    
+    setUploadedFiles(prev => [...prev, ...newFiles])
+  }
+
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const validateForm = () => {
+    const errors: string[] = []
+    
+    if (!formData.business_name.trim()) errors.push("Business name is required")
+    if (!formData.business_address.trim()) errors.push("Business address is required")
+    if (!formData.contact_email.trim()) errors.push("Email address is required")
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (formData.contact_email && !emailRegex.test(formData.contact_email)) {
+      errors.push("Please enter a valid email address")
+    }
+    
+    // Phone validation (if provided)
+    if (formData.phone) {
+      const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/
+      if (!phoneRegex.test(formData.phone.replace(/[\s\-\(\)]/g, ''))) {
+        errors.push("Please enter a valid phone number")
+      }
+    }
+    
+    // Website validation (if provided)
+    if (formData.website && !formData.website.startsWith('http')) {
+      setFormData(prev => ({
+        ...prev,
+        website: `https://${formData.website}`
+      }))
+    }
+    
+    return errors
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-
+    setError("")
+  
+    // Validate form
+    const validationErrors = validateForm()
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join(", "))
+      setLoading(false)
+      return
+    }
+  
     try {
-      const response = await fetch("/api/clients/claim", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
+      // console.log("🔐 Authenticating with dummy business claim account...")
+      
+      // Sign in with dummy account for business claim access
+      const { signInWithEmailAndPassword } = await import('firebase/auth')
+      const { auth } = await import('@/services/firebase')
+      
+      if (!auth) {
+        throw new Error('Firebase not configured')
+      }
+  
+      await signInWithEmailAndPassword(
+        auth, 
+        'public_business_claim@gladgrade.com',
+        'thisisbusinessclaimpublicuserpassw0rd!'
+      )
+      
+      // console.log("✅ Authenticated with dummy account")
+  
+      // Prepare form data for submission
+      const submitData = new FormData()
+      
+      // Add form fields
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value) submitData.append(key, value)
       })
-
+      
+      // Add metadata
+      submitData.append('form_start_time', formStartTime.toString())
+      
+      // Add files
+      uploadedFiles.forEach(uploadedFile => {
+        submitData.append('documents', uploadedFile.file)
+      })
+  
+      // console.log("🚀 Submitting business claim...")
+  
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://gladgrade-api-360532994710.us-east4.run.app'}/api/portal/sales/businessclaim_submit`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
+            // Note: Don't set Content-Type for FormData - let browser set it
+          },
+          body: submitData
+        }
+      )
+  
       const result = await response.json()
-
+  
       if (result.success) {
-        setClaimResult(result)
-        setStep(3) // Success step
+        // console.log("✅ Business claim submitted successfully:", result)
+        
+        // Sign out dummy account
+        await auth.signOut()
+        // console.log("🔐 Signed out dummy account")
+        
+        setSuccess(true)
+        
+        // Show success message and redirect after delay
+        setTimeout(() => {
+          router.push('/')
+        }, 5000)
       } else {
-        alert(`Error: ${result.error}`)
+        console.error("❌ Business claim submission failed:", result)
+        setError(result.error || "Failed to submit business claim")
+        
+        // Sign out dummy account even on failure
+        try {
+          await auth.signOut()
+        } catch (signOutError) {
+          console.error("Error signing out:", signOutError)
+        }
       }
     } catch (error) {
-      console.error("Error submitting claim:", error)
-      alert("Failed to submit claim request. Please try again.")
+      console.error("❌ Error submitting business claim:", error)
+      setError("Network error. Please try again.")
+      
+      // Sign out dummy account on error
+      try {
+        const { auth } = await import('@/services/firebase')
+        if (auth?.currentUser) {
+          await auth.signOut()
+        }
+      } catch (signOutError) {
+        console.error("Error signing out:", signOutError)
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  if (step === 3 && claimResult) {
+  if (success) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
-        <div className="max-w-2xl mx-auto px-4">
-          <Card className="border-green-200 bg-green-50">
-            <CardHeader className="text-center">
-              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                <CheckCircle className="h-8 w-8 text-green-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-50 p-4">
+        <Card className="w-full max-w-2xl shadow-xl border-0 bg-white">
+          <CardContent className="p-8 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="p-4 bg-green-100 rounded-full">
+                <CheckCircle className="h-12 w-12 text-green-600" />
               </div>
-              <CardTitle className="text-2xl text-green-800">
-                {claimResult.auto_approved ? "Business Claim Approved!" : "Claim Request Submitted!"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-center space-y-6">
-              <p className="text-green-700">{claimResult.message}</p>
-
-              {claimResult.auto_approved && (
-                <div className="bg-white p-4 rounded-lg border border-green-200">
-                  <h3 className="font-semibold text-green-800 mb-2">🎉 Instant Approval!</h3>
-                  <p className="text-sm text-green-600">
-                    Your business ownership was automatically verified. You can now create your account and start using
-                    GladGrade.
-                  </p>
-                </div>
-              )}
-
-              <div className="bg-white p-4 rounded-lg">
-                <h3 className="font-semibold mb-3">Next Steps:</h3>
-                <ul className="space-y-2 text-left">
-                  {claimResult.next_steps?.map((step: string, index: number) => (
-                    <li key={index} className="flex items-center gap-2">
-                      <ArrowRight className="h-4 w-4 text-primary" />
-                      <span className="text-sm">{step}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="flex gap-4 justify-center">
-                <Button
-                  className="bg-primary hover:bg-primary-dark text-dark"
-                  onClick={() => (window.location.href = "/")}
-                >
-                  Create Account
-                </Button>
-                <Button variant="outline" onClick={() => (window.location.href = "/")}>
-                  Back to Home
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+            
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">
+              Business Claim Submitted!
+            </h1>
+            
+            <p className="text-lg text-gray-600 mb-6">
+              Thank you for claiming your business with GladGrade. We've received your information and will verify it within 24-72 hours.
+            </p>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
+              <ul className="text-sm text-blue-800 space-y-1 text-left">
+                <li>• You'll receive a confirmation email shortly</li>
+                <li>• Our team will verify your business information</li>
+                <li>• We may contact you for additional details</li>
+                <li>• Once approved, you'll receive login credentials</li>
+              </ul>
+            </div>
+            
+            <p className="text-sm text-gray-500 mb-6">
+              Questions? Contact us at <strong>sales.support@gladgrade.com</strong> or call <strong>(800) 258-1352</strong>
+            </p>
+            
+            <Button 
+              onClick={() => router.push('/')}
+              className="bg-primary hover:bg-primary-dark"
+            >
+              Return to Login
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-4xl mx-auto px-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-primary/10 p-4">
+      <div className="max-w-4xl mx-auto">
+        
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-dark mb-4">Claim Your Business</h1>
-          <p className="text-xl text-gray-600 mb-6">Take control of your business reputation on GladGrade</p>
-
-          {/* Benefits */}
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <Star className="h-8 w-8 text-primary mx-auto mb-3" />
-              <h3 className="font-semibold mb-2">Monitor Reviews</h3>
-              <p className="text-sm text-gray-600">Track and respond to customer feedback in real-time</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <Shield className="h-8 w-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="font-semibold mb-2">Boost GCSG Score</h3>
-              <p className="text-sm text-gray-600">Improve your Global Customer Satisfaction Grade</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <Building className="h-8 w-8 text-green-600 mx-auto mb-3" />
-              <h3 className="font-semibold mb-2">Advertise & Promote</h3>
-              <p className="text-sm text-gray-600">Purchase ad placements to reach more customers</p>
-            </div>
-          </div>
+        <div className="flex items-center justify-between mb-8">
+          <Button
+            variant="ghost"
+            onClick={() => router.push('/')}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Login
+          </Button>
+          <Logo size="md" />
         </div>
 
-        {/* Claim Form */}
-        <Card className="max-w-2xl mx-auto">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building className="h-5 w-5" />
-              Business Information
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                <Clock className="h-3 w-3 mr-1" />
-                Usually approved within 24 hours
-              </Badge>
+        <Card className="shadow-xl border-0 bg-white/95 backdrop-blur-sm">
+          <CardHeader className="text-center pb-8">
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-primary/10 rounded-full">
+                <Building2 className="h-8 w-8 text-primary" />
+              </div>
             </div>
+            <CardTitle className="text-3xl font-bold text-gray-900">
+              Claim Your Business
+            </CardTitle>
+            <CardDescription className="text-lg text-gray-600">
+              Join GladGrade to improve customer satisfaction and grow your business
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="business_name">Business Name *</Label>
-                  <Input
-                    id="business_name"
-                    placeholder="Amazing Restaurant"
-                    value={formData.business_name}
-                    onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact_name">Your Name *</Label>
-                  <Input
-                    id="contact_name"
-                    placeholder="John Smith"
-                    value={formData.contact_name}
-                    onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="contact_email">Business Email *</Label>
-                  <Input
-                    id="contact_email"
-                    type="email"
-                    placeholder="owner@amazingrestaurant.com"
-                    value={formData.contact_email}
-                    onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                    required
-                  />
-                  <p className="text-xs text-gray-500">Use your business domain email for faster verification</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    placeholder="+1 (305) 555-0123"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  />
-                </div>
-              </div>
+          <CardContent className="space-y-8">
+            
+            {error && (
+              <Alert className="border-red-200 bg-red-50">
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
 
-              <div className="space-y-2">
-                <Label htmlFor="website">Website</Label>
-                <Input
-                  id="website"
-                  placeholder="https://amazingrestaurant.com"
-                  value={formData.website}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="business_address">Business Address</Label>
-                <Textarea
-                  id="business_address"
-                  placeholder="123 Main Street, Miami, FL 33101"
-                  value={formData.business_address}
-                  onChange={(e) => setFormData({ ...formData, business_address: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="industry">Industry Category</Label>
-                <Select
-                  value={formData.industry_category_id}
-                  onValueChange={(value) => setFormData({ ...formData, industry_category_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your industry" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {industryCategories.map((category) => (
-                      <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.icon} {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Verification Method */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-blue-900 mb-2">Verification Method</h3>
-                <p className="text-sm text-blue-700 mb-3">
-                  We'll verify your business ownership using your email domain and provided information.
-                </p>
-                <div className="text-xs text-blue-600">
-                  ✅ Email domain matching
-                  <br />✅ Business information verification
-                  <br />✅ Automatic approval for qualified businesses
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-primary hover:bg-primary-dark text-dark"
-                disabled={loading || !formData.business_name || !formData.contact_name || !formData.contact_email}
-              >
-                {loading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-dark"></div>
-                    Processing Claim...
+            <form onSubmit={handleSubmit} className="space-y-8">
+              
+              {/* Business Information */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">
+                  Business Information
+                </h3>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="business_name" className="text-sm font-medium">
+                      Business Name *
+                    </Label>
+                    <Input
+                      id="business_name"
+                      value={formData.business_name}
+                      onChange={(e) => handleInputChange('business_name', e.target.value)}
+                      placeholder="Enter your business name"
+                      required
+                    />
                   </div>
-                ) : (
-                  "Submit Claim Request"
-                )}
-              </Button>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="industry_category_id" className="text-sm font-medium">
+                      Industry Category
+                    </Label>
+                    <Select
+                      value={formData.industry_category_id}
+                      onValueChange={(value) => handleInputChange('industry_category_id', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={loadingCategories ? "Loading categories..." : "Select category"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id.toString()}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-              <p className="text-xs text-gray-500 text-center">
-                By submitting this form, you confirm that you are authorized to represent this business and agree to
-                GladGrade's Terms of Service and Privacy Policy.
-              </p>
+                <div className="space-y-2">
+                  <Label htmlFor="business_address" className="text-sm font-medium">
+                    Business Address *
+                  </Label>
+                  <Textarea
+                    id="business_address"
+                    value={formData.business_address}
+                    onChange={(e) => handleInputChange('business_address', e.target.value)}
+                    placeholder="Enter your complete business address"
+                    rows={3}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="website" className="text-sm font-medium">
+                    Website
+                  </Label>
+                  <Input
+                    id="website"
+                    type="url"
+                    value={formData.website}
+                    onChange={(e) => handleInputChange('website', e.target.value)}
+                    placeholder="https://yourwebsite.com"
+                  />
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">
+                  Contact Information
+                </h3>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="contact_name" className="text-sm font-medium">
+                      Contact Name
+                    </Label>
+                    <Input
+                      id="contact_name"
+                      value={formData.contact_name}
+                      onChange={(e) => handleInputChange('contact_name', e.target.value)}
+                      placeholder="Your name"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="contact_email" className="text-sm font-medium">
+                      Email Address *
+                    </Label>
+                    <Input
+                      id="contact_email"
+                      type="email"
+                      value={formData.contact_email}
+                      onChange={(e) => handleInputChange('contact_email', e.target.value)}
+                      placeholder="your@email.com"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-sm font-medium">
+                      Business Phone
+                    </Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange('phone', e.target.value)}
+                      placeholder="(555) 123-4567"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="admin_phone" className="text-sm font-medium">
+                      Admin Phone (if different)
+                    </Label>
+                    <Input
+                      id="admin_phone"
+                      type="tel"
+                      value={formData.admin_phone}
+                      onChange={(e) => handleInputChange('admin_phone', e.target.value)}
+                      placeholder="(555) 987-6543"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Verification Information */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">
+                  Business Verification (Optional)
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Providing this information will help speed up the verification process.
+                </p>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="fein" className="text-sm font-medium">
+                      Federal EIN (FEIN)
+                    </Label>
+                    <Input
+                      id="fein"
+                      value={formData.fein}
+                      onChange={(e) => handleInputChange('fein', e.target.value)}
+                      placeholder="12-3456789"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="dun_bradstreet_id" className="text-sm font-medium">
+                      Dun & Bradstreet ID
+                    </Label>
+                    <Input
+                      id="dun_bradstreet_id"
+                      value={formData.dun_bradstreet_id}
+                      onChange={(e) => handleInputChange('dun_bradstreet_id', e.target.value)}
+                      placeholder="123456789"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Document Upload */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">
+                  Supporting Documents (Optional)
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Upload documents to verify business ownership (business license, tax documents, utility bills, etc.)
+                </p>
+                
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <Label htmlFor="file-upload" className="cursor-pointer">
+                    <div className="flex flex-col items-center">
+                      <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                      <span className="text-sm font-medium text-gray-700">
+                        Click to upload files
+                      </span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        PDF, JPG, PNG, DOC, DOCX up to 10MB each
+                      </span>
+                    </div>
+                  </Label>
+                </div>
+
+                {/* Uploaded Files */}
+                {uploadedFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-900">Uploaded Files:</h4>
+                    <div className="space-y-2">
+                      {uploadedFiles.map((uploadedFile, index) => (
+                        <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="p-1 bg-gray-200 rounded">
+                              <Upload className="h-4 w-4 text-gray-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {uploadedFile.file.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {(uploadedFile.file.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeFile(index)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Terms and Submit */}
+              <div className="space-y-6 pt-6 border-t border-gray-200">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-900 mb-2">What happens next?</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• We'll verify your business information within 24-72 hours</li>
+                    <li>• You'll receive a confirmation email with next steps</li>
+                    <li>• Our team may contact you for additional verification</li>
+                    <li>• Once approved, you'll receive login credentials</li>
+                  </ul>
+                </div>
+
+                <div className="flex justify-center">
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full md:w-auto px-12 h-12 bg-primary hover:bg-primary-dark text-white font-semibold shadow-lg hover:shadow-xl transition-all"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit Business Claim"
+                    )}
+                  </Button>
+                </div>
+              </div>
             </form>
           </CardContent>
         </Card>

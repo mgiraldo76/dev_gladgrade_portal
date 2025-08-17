@@ -2556,3 +2556,93 @@ CREATE TABLE business_client_services (
 CREATE INDEX idx_business_client_services_client ON business_client_services(business_client_id);
 CREATE INDEX idx_business_client_services_service ON business_client_services(service_id);
 CREATE INDEX idx_business_client_services_active ON business_client_services(is_active);
+
+
+
+
+
+
+INSERT INTO permissions (name, description) VALUES
+('client_manage_menu', 'Create and edit menu/services/products'),
+('client_publish_menu', 'Publish menu changes'),
+('client_view_menu_history', 'View menu version history');
+
+
+
+INSERT INTO services (
+    name, 
+    description, 
+    category_id, 
+    base_price, 
+    setup_fee, 
+    monthly_fee,
+    commission_rate, 
+    commission_type, 
+    is_recurring, 
+    billing_cycle,
+    available_portal, 
+    available_mobile, 
+    service_type, 
+    display_order
+) VALUES
+-- Menu Services Category (assuming Premium Features category_id = 4)
+('Menu-3', 'Create up to 3 custom menus for your business', 4, 0.00, 0.00, 0.00, 0.00, 'percentage', FALSE, 'one_time', TRUE, FALSE, 'standard', 19),
+('Menu-10', 'Create up to 10 custom menus for your business', 4, 0.00, 0.00, 0.00, 0.00, 'percentage', FALSE, 'one_time', TRUE, FALSE, 'premium', 20),
+('Menu-Unlimited', 'Create unlimited custom menus for your business', 4, 0.00, 0.00, 0.00, 0.00, 'percentage', FALSE, 'one_time', TRUE, FALSE, 'enterprise', 21);
+
+
+-- Create business_client_services table in corp database
+CREATE TABLE business_client_services (
+    id SERIAL PRIMARY KEY,
+    business_client_id INTEGER REFERENCES business_clients(id) ON DELETE CASCADE,
+    service_id INTEGER REFERENCES services(id) ON DELETE CASCADE,
+    status VARCHAR(50) DEFAULT 'active', -- 'active', 'inactive', 'expired'
+    start_date DATE DEFAULT CURRENT_DATE,
+    end_date DATE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(business_client_id, service_id)
+);
+
+CREATE INDEX idx_business_client_services_client ON business_client_services(business_client_id);
+CREATE INDEX idx_business_client_services_service ON business_client_services(service_id);
+CREATE INDEX idx_business_client_services_active ON business_client_services(is_active);
+
+
+
+
+
+
+-- Add columns to business_claim_requests table
+ALTER TABLE business_claim_requests 
+ADD COLUMN IF NOT EXISTS fein VARCHAR(50),
+ADD COLUMN IF NOT EXISTS dun_bradstreet_id VARCHAR(50),
+ADD COLUMN IF NOT EXISTS client_ip INET,
+ADD COLUMN IF NOT EXISTS user_agent TEXT,
+ADD COLUMN IF NOT EXISTS browser_info JSONB,
+ADD COLUMN IF NOT EXISTS referrer_url VARCHAR(500),
+ADD COLUMN IF NOT EXISTS device_type VARCHAR(50),
+ADD COLUMN IF NOT EXISTS session_id VARCHAR(255),
+ADD COLUMN IF NOT EXISTS form_completion_time INTEGER; -- seconds to complete form
+
+-- Add business_claim_requests_id to prospects table
+ALTER TABLE prospects 
+ADD COLUMN IF NOT EXISTS business_claim_requests_id INTEGER REFERENCES business_claim_requests(id);
+
+-- Create index for performance
+CREATE INDEX IF NOT EXISTS idx_prospects_business_claim_requests_id 
+ON prospects(business_claim_requests_id);
+
+-- Add comments for documentation
+COMMENT ON COLUMN business_claim_requests.fein IS 'Federal Employer Identification Number';
+COMMENT ON COLUMN business_claim_requests.dun_bradstreet_id IS 'Dun & Bradstreet business identifier';
+COMMENT ON COLUMN business_claim_requests.client_ip IS 'IP address of form submitter';
+COMMENT ON COLUMN business_claim_requests.user_agent IS 'Browser user agent string';
+COMMENT ON COLUMN business_claim_requests.browser_info IS 'Additional browser/device metadata';
+COMMENT ON COLUMN business_claim_requests.referrer_url IS 'URL that referred user to claim form';
+COMMENT ON COLUMN business_claim_requests.device_type IS 'desktop, mobile, tablet, etc.';
+COMMENT ON COLUMN business_claim_requests.session_id IS 'Unique session identifier';
+COMMENT ON COLUMN business_claim_requests.form_completion_time IS 'Time in seconds to complete form';
+COMMENT ON COLUMN prospects.business_claim_requests_id IS 'Links to original business claim request';
