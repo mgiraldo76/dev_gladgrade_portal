@@ -16,6 +16,7 @@ import {
   BarChart3,
   Users,
   Settings,
+  ConciergeBell,
   HelpCircle,
   User,
   TrendingUp,
@@ -27,6 +28,8 @@ import {
   Utensils, // NEW: Menu icon
   Menu // NEW: Alternative menu icon
 } from "lucide-react"
+//import { Settings } from "lucide-react"
+
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -144,7 +147,7 @@ export function Sidebar() {
       clientOnly: true,
     },
     
-    // === NEW: GLADMENU ADMIN SECTION ===
+    // === GLADMENU ADMIN SECTION ===
     {
       name: "GladMenu Admin",
       href: "/dashboard/menu",
@@ -153,6 +156,17 @@ export function Sidebar() {
       clientRoles: ["client_admin"], // Only client admins can manage menu
       description: "Manage your menu, services, or inventory",
       isNew: true, // Flag to show "NEW" badge
+    },
+
+    
+    // === SERVICES ADMIN SECTION ===
+    {
+      name: "Services Management",
+      href: "/dashboard/services",
+      icon: ConciergeBell,
+      roles: ["super_admin", "admin", "client", "employee"],
+      clientRoles: ["client_admin"], // Only client admins can access services
+      description: "Manage and purchase GladGrade services",
     },
     
     // === UNIVERSAL SECTIONS (Everyone) ===
