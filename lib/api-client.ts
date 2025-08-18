@@ -861,6 +861,7 @@ class ApiClient {
   async getClientServices(clientId: number) {
     return this.request(`/portal/clients/${clientId}/services`)
   }
+  
 
   
   
@@ -943,6 +944,141 @@ class ApiClient {
       body: JSON.stringify({ menuName }),
     })
   }
+
+
+
+
+
+
+
+
+
+
+  
+  // ===== NEW SERVICES MANAGEMENT API METHODS =====
+
+  // Get all services (admin/employee view)
+  async getAllServices() {
+    return this.request("/portal/services")
+  }
+  
+  // Create new service (Super Admin/CCO only)
+  async createService(service: {
+    name: string
+    description: string
+    category_id: number
+    base_price?: number
+    setup_fee?: number
+    monthly_fee?: number
+    commission_rate?: number
+    commission_type?: 'percentage' | 'fixed'
+    commission_amount?: number
+    is_recurring?: boolean
+    billing_cycle?: 'one_time' | 'monthly' | 'quarterly' | 'yearly'
+    available_portal?: boolean
+    available_mobile?: boolean
+    available_gladgrade_only?: boolean
+    service_type?: 'standard' | 'premium' | 'enterprise' | 'addon'
+    requires_approval?: boolean
+    max_quantity?: number
+    is_active?: boolean
+    is_featured?: boolean
+    display_order?: number
+  }) {
+    return this.request("/portal/services", {
+      method: "POST",
+      body: JSON.stringify(service),
+    })
+  }
+  
+  // Update service (Super Admin/CCO only)
+  async updateService(serviceId: number, updates: Partial<{
+    name: string
+    description: string
+    category_id: number
+    base_price: number
+    setup_fee: number
+    monthly_fee: number
+    commission_rate: number
+    commission_type: 'percentage' | 'fixed'
+    commission_amount: number
+    is_recurring: boolean
+    billing_cycle: 'one_time' | 'monthly' | 'quarterly' | 'yearly'
+    available_portal: boolean
+    available_mobile: boolean
+    available_gladgrade_only: boolean
+    service_type: 'standard' | 'premium' | 'enterprise' | 'addon'
+    requires_approval: boolean
+    max_quantity: number
+    is_active: boolean
+    is_featured: boolean
+    display_order: number
+  }>) {
+    return this.request(`/portal/services/${serviceId}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    })
+  }
+  
+  // Delete service (Super Admin/CCO only)
+  async deleteService(serviceId: number) {
+    return this.request(`/portal/services/${serviceId}`, {
+      method: "DELETE",
+    })
+  }
+  
+  // Get service categories
+  async getServiceCategories() {
+    return this.request("/portal/services/categories")
+  }
+  
+  // Create service category (Super Admin/CCO only)
+  async createServiceCategory(category: {
+    name: string
+    description?: string
+    display_order?: number
+    is_active?: boolean
+  }) {
+    return this.request("/portal/services/categories", {
+      method: "POST",
+      body: JSON.stringify(category),
+    })
+  }
+  
+  // Get client services (current and available) - NEW ENDPOINT
+  async getClientServicesDetailed(clientId: number) {
+    return this.request(`/portal/services/client/${clientId}`)
+  }
+  
+  // Purchase/upgrade service for client
+  async purchaseClientService(clientId: number, serviceData: {
+    service_id: number
+    notes?: string
+  }) {
+    return this.request(`/portal/services/client/${clientId}/purchase`, {
+      method: "POST",
+      body: JSON.stringify(serviceData),
+    })
+  }
+  
+  // Update the existing services convenience object (find it around line 670)
+  // Replace the existing services object with this:
+  services = {
+    // Admin/Employee methods
+    getAll: this.getAllServices.bind(this),
+    create: this.createService.bind(this),
+    update: this.updateService.bind(this),
+    delete: this.deleteService.bind(this),
+    getCategories: this.getServiceCategories.bind(this),
+    createCategory: this.createServiceCategory.bind(this),
+    
+    // Client methods
+    getClientServices: this.getClientServices.bind(this), // Legacy method (simple list)
+    getClientServicesDetailed: this.getClientServicesDetailed.bind(this), // New detailed method
+    purchase: this.purchaseClientService.bind(this)
+  }
+
+
 
 
 }
