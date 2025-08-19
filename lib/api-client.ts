@@ -649,6 +649,41 @@ class ApiClient {
 
 
 
+
+
+
+
+
+
+
+
+  // ===== EMPLOYEE PERMISSIONS API METHODS =====
+
+  // Get all available permissions
+  async getAvailablePermissions() {
+    return this.request("/portal/employees/permissions")
+  }
+
+  // Get employee's current permissions
+  async getEmployeePermissions(employeeId: number) {
+    return this.request(`/portal/employees/${employeeId}/permissions`)
+  }
+
+  // Update employee permissions
+  async updateEmployeePermissions(employeeId: number, permissions: string[]) {
+    return this.request(`/portal/employees/${employeeId}/permissions`, {
+      method: "PUT",
+      body: JSON.stringify({ permissions }),
+    })
+  }
+
+
+
+
+
+
+
+
   // ===== MENU MANAGEMENT API METHODS =====
 
   // Get menu configuration for a business

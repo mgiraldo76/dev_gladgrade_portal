@@ -1,5 +1,3 @@
-// Path: /components/sidebar.tsx (Updated)
-// Name: Updated Sidebar Component with GladMenu Admin Option
 
 "use client"
 
@@ -25,45 +23,20 @@ import {
   Database,
   ShieldCheck,
   ImageIcon,
-  Utensils, // NEW: Menu icon
-  Menu // NEW: Alternative menu icon
+  Utensils,
 } from "lucide-react"
-//import { Settings } from "lucide-react"
-
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { user, role, clientRole } = useAuth()
-  const [hasClientAccess, setHasClientAccess] = useState(false)
+  const { user, role, clientRole, permissions } = useAuth()
 
-  useEffect(() => {
-    async function checkClientAccess() {
-      if (role && role !== "client" && user?.email) {
-        try {
-          const response = await fetch('/api/check-client-access', {
-            headers: {
-              'Authorization': `Bearer ${await user.getIdToken()}`,
-            },
-          })
-          if (response.ok) {
-            setHasClientAccess(true)
-          } else {
-            console.error("Client access check failed:", response.statusText)
-            setHasClientAccess(false)
-          }
-        } catch (error) {
-          console.error("Error checking client access:", error)
-          setHasClientAccess(false)
-        }
-      } else {
-        setHasClientAccess(false)
-      }
-    }
+  // Helper function to check if user has any of the required permissions
+  const hasPermission = (requiredPermissions: string[]) => {
+    if (!requiredPermissions || requiredPermissions.length === 0) return true
+    return requiredPermissions.some(permission => permissions.includes(permission))
+  }
 
-    checkClientAccess()
-  }, [role, user?.email])
-
-  // Define menu items with role-based access
+  // Define menu items with role-based and permission-based access
   const navigationItems = [
     // === UNIVERSAL SECTIONS (Everyone) ===
     {
@@ -80,7 +53,7 @@ export function Sidebar() {
       href: "/dashboard/sales",
       icon: TrendingUp,
       roles: ["super_admin", "admin", "employee"],
-      requiresSalesAccess: true,
+      requiredPermissions: ["sales_pipeline"],
       employeeOnly: true,
     },
     {
@@ -88,7 +61,7 @@ export function Sidebar() {
       href: "/dashboard/clients",
       icon: Building,
       roles: ["super_admin", "admin", "employee"],
-      requiresClientAccess: true,
+      requiredPermissions: ["client_management", "client_support"], // Show if user has EITHER permission
       employeeOnly: true,
     },
     {
@@ -96,6 +69,7 @@ export function Sidebar() {
       href: "/dashboard/partners",
       icon: Heart,
       roles: ["super_admin", "admin"],
+      requiredPermissions: ["partner_relations"],
       employeeOnly: true,
     },
     {
@@ -103,6 +77,7 @@ export function Sidebar() {
       href: "/dashboard/moderation",
       icon: ImageIcon,
       roles: ["super_admin", "admin", "moderator"],
+      requiredPermissions: ["content_moderation"],
       employeeOnly: true,
     },
     {
@@ -110,6 +85,7 @@ export function Sidebar() {
       href: "/dashboard/system",
       icon: Database,
       roles: ["super_admin"],
+      requiredPermissions: ["system_admin"],
       employeeOnly: true,
     },
     {
@@ -117,6 +93,7 @@ export function Sidebar() {
       href: "/dashboard/users",
       icon: ShieldCheck,
       roles: ["super_admin", "admin"],
+      requiredPermissions: ["user_management"],
       employeeOnly: true,
     },
     
@@ -135,7 +112,7 @@ export function Sidebar() {
       href: "/dashboard/reports",
       icon: BarChart3,
       roles: ["super_admin", "admin", "client"],
-      clientRoles: ["client_admin", "client_user"], // client_moderator and client_viewer excluded
+      clientRoles: ["client_admin", "client_user"],
       clientOnly: true,
     },
     {
@@ -143,7 +120,7 @@ export function Sidebar() {
       href: "/dashboard/clients/team",
       icon: Users,
       roles: ["client"],
-      clientRoles: ["client_admin"], // Only client admins can manage team
+      clientRoles: ["client_admin"],
       clientOnly: true,
     },
     
@@ -153,11 +130,10 @@ export function Sidebar() {
       href: "/dashboard/menu",
       icon: Utensils,
       roles: ["super_admin", "admin", "client", "employee"],
-      clientRoles: ["client_admin"], // Only client admins can manage menu
+      clientRoles: ["client_admin"],
       description: "Manage your menu, services, or inventory",
-      isNew: true, // Flag to show "NEW" badge
+      isNew: true,
     },
-
     
     // === SERVICES ADMIN SECTION ===
     {
@@ -165,7 +141,7 @@ export function Sidebar() {
       href: "/dashboard/services",
       icon: ConciergeBell,
       roles: ["super_admin", "admin", "client", "employee"],
-      clientRoles: ["client_admin"], // Only client admins can access services
+      clientRoles: ["client_admin"],
       description: "Manage and purchase GladGrade services",
     },
     
@@ -186,7 +162,7 @@ export function Sidebar() {
     },
   ]
 
-  // Filter navigation items based on user role and access
+  // Filter navigation items based on user role and permissions
   const filteredNavigation = navigationItems.filter((item) => {
     // Check role access
     if (!role || !item.roles.includes(role)) {
@@ -210,14 +186,17 @@ export function Sidebar() {
       return false
     }
 
-    // Check special access requirements for employees
-    if (item.requiresClientAccess && !hasClientAccess) {
-      return false
-    }
-
-    if (item.requiresSalesAccess) {
-      // Sales access logic - you can customize this
-      return role === "super_admin" || role === "admin" || role === "employee"
+    // Check permission requirements for GladGrade employees
+    if (item.requiredPermissions && role !== "client") {
+      // Super admin always has access
+      if (role === "super_admin") {
+        return true
+      }
+      
+      // Check if user has any of the required permissions
+      if (!hasPermission(item.requiredPermissions)) {
+        return false
+      }
     }
 
     return true
@@ -234,7 +213,6 @@ export function Sidebar() {
       case "moderator":
         return { text: "Moderator", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" }
       case "client":
-        // Show specific client role
         const clientRoleText = clientRole 
           ? clientRole.replace('client_', '').replace('_', ' ')
           : 'Client'
@@ -280,7 +258,7 @@ export function Sidebar() {
                     <Icon className="h-4 w-4" />
                     <span className="flex-1 text-left">{item.name}</span>
                     
-                    {/* NEW: Show badge for new features */}
+                    {/* Show badge for new features */}
                     {item.isNew && (
                       <Badge 
                         variant="secondary" 
@@ -310,6 +288,11 @@ export function Sidebar() {
                 <p className="text-xs text-muted-foreground">
                   {roleBadge.text}
                 </p>
+                {permissions.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {permissions.length} permission{permissions.length !== 1 ? 's' : ''}
+                  </p>
+                )}
               </div>
             </div>
           </div>
