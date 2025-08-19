@@ -10,11 +10,14 @@ import { ThemeProvider } from "@/components/theme-provider"
 type UserRole = "super_admin" | "admin" | "moderator" | "employee" | "client" | null
 type ClientRole = "client_admin" | "client_moderator" | "client_user" | "client_viewer" | null
 
+
+
 interface AuthContextType {
   user: User | null
   role: UserRole
   clientRole: ClientRole
   businessId: number | null
+  permissions: string[]
   loading: boolean
   isFirebaseConfigured: boolean
 }
@@ -24,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   clientRole: null,
   businessId: null,
+  permissions: [],
   loading: true,
   isFirebaseConfigured: false,
 })
@@ -79,99 +83,128 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole>(null)
   const [clientRole, setClientRole] = useState<ClientRole>(null)
   const [businessId, setBusinessId] = useState<number | null>(null)
+  const [permissions, setPermissions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(false)
 
+  // In the useEffect where you handle auth state changes, update the permissions logic:
   useEffect(() => {
     console.log("🚀 AuthProvider useEffect running...")
 
     // Check if Firebase is properly configured
     const hasValidConfig = !!(
       process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
       process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
-      process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
     )
 
-    console.log("🔧 Firebase configured:", hasValidConfig)
+    console.log("🔧 Firebase config status:", hasValidConfig)
     setIsFirebaseConfigured(hasValidConfig)
 
-    if (auth && hasValidConfig) {
-      console.log("🔐 Setting up Firebase auth listener...")
+    if (!hasValidConfig) {
+      console.log("⚠️ Firebase not configured, setting loading to false")
+      setLoading(false)
+      return
+    }
 
-      const unsubscribe = onAuthStateChanged(auth, async (user) => {
-        console.log("🔄 Auth state changed:", user ? `User: ${user.email}` : "No user")
-        setUser(user)
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("🔄 Auth state changed:", firebaseUser ? `User: ${firebaseUser.email}` : "No user")
 
-        if (user && user.email) {
-          try {
-            console.log("🎯 Getting user role...")
+      if (firebaseUser) {
+        setUser(firebaseUser)
+        console.log("🎯 Getting user role...")
 
-            // First try to get role from Firebase custom claims
-            const token = await user.getIdTokenResult()
-            let userRole = token.claims.role as UserRole
-            let userBusinessId: number | null = null
-            let userClientRole: ClientRole = null
+        try {
+          // Get the ID token to access custom claims
+          const idTokenResult = await firebaseUser.getIdTokenResult()
+          const claims = idTokenResult.claims
 
-            console.log("🏷️ Custom claim role:", userRole)
+          console.log("🏷️ Custom claim role:", claims.role)
+          console.log("🔐 Custom claim permissions:", claims.permissions)
 
-            // Extract businessId for client users
-            if (userRole === "client" && token.claims.businessId) {
-              userBusinessId = parseInt(token.claims.businessId as string)
-              console.log("🏢 Client businessId extracted:", userBusinessId)
-              
-              // Extract client role
-              if (token.claims.user_role) {
-                userClientRole = token.claims.user_role as ClientRole
-                console.log("👤 Client role extracted:", userClientRole)
-              }
+          // Set role based on custom claims
+          if (claims.role) {
+            setRole(claims.role as UserRole)
+            console.log("✅ Final role set:", claims.role)
+          } else {
+            // Fallback to email-based role determination
+            const emailRole = getUserRoleFromEmail(firebaseUser.email || "")
+            setRole(emailRole)
+            console.log("✅ Final role set (from email):", emailRole)
+          }
+
+          // Set permissions from custom claims
+          if (claims.permissions && Array.isArray(claims.permissions)) {
+            setPermissions(claims.permissions)
+            console.log("✅ Permissions set:", claims.permissions)
+          } else {
+            setPermissions([])
+            console.log("ℹ️ No permissions found in custom claims")
+          }
+
+          // Handle client-specific data
+          if (claims.role === "client") {
+            if (claims.businessId && typeof claims.businessId === 'string') {
+              setBusinessId(parseInt(claims.businessId))
+              console.log("🏢 Client businessId extracted:", claims.businessId)
+            } else if (claims.businessId && typeof claims.businessId === 'number') {
+              setBusinessId(claims.businessId)
+              console.log("🏢 Client businessId extracted (number):", claims.businessId)
+            } else {
+              console.log("⚠️ No valid businessId found in claims")
+              setBusinessId(null)
             }
-
-            // If no custom claim exists, determine role from email domain
-            if (!userRole) {
-              userRole = getUserRoleFromEmail(user.email)
-              console.log(`🔐 Role assigned based on email domain: ${user.email} → ${userRole}`)
+            
+            if (claims.user_role && typeof claims.user_role === 'string') {
+              setClientRole(claims.user_role as ClientRole)
+              console.log("👤 Client role extracted:", claims.user_role)
+            } else {
+              console.log("⚠️ No valid user_role found in claims")
+              setClientRole(null)
             }
-
-            setRole(userRole)
-            setClientRole(userClientRole)
-            setBusinessId(userBusinessId)
-            console.log("✅ Final role set:", userRole)
-            console.log("✅ Final clientRole set:", userClientRole)
-            console.log("✅ Final businessId set:", userBusinessId)
-          } catch (error) {
-            console.error("❌ Error getting user role:", error)
-            // Fallback to email-based role assignment
-            const fallbackRole = getUserRoleFromEmail(user.email)
-            setRole(fallbackRole)
+          } else {
             setClientRole(null)
             setBusinessId(null)
-            console.log(`🔄 Fallback role assigned: ${user.email} → ${fallbackRole}`)
+            console.log("🏢 Non-client user, cleared client data")
           }
-        } else {
-          console.log("👤 No user, setting role and businessId to null")
-          setRole(null)
-          setClientRole(null)
-          setBusinessId(null)
+
+        } catch (error) {
+          console.error("❌ Error getting custom claims:", error)
+          const emailRole = getUserRoleFromEmail(firebaseUser.email || "")
+          setRole(emailRole)
+          setPermissions([])
         }
-
-        console.log("⏰ Setting loading to false")
-        setLoading(false)
-      })
-
-      return () => {
-        console.log("🧹 Cleaning up auth listener")
-        unsubscribe()
+      } else {
+        console.log("👤 No user, setting role and businessId to null")
+        setUser(null)
+        setRole(null)
+        setClientRole(null)
+        setBusinessId(null)
+        setPermissions([])
       }
-    } else {
-      // If Firebase is not configured, set loading to false
-      console.log("❌ Firebase not configured or auth not available")
+
+      console.log("⏰ Setting loading to false")
       setLoading(false)
+    })
+
+    return () => {
+      console.log("🧹 Cleaning up auth listener")
+      unsubscribe()
     }
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, role, clientRole, businessId, loading, isFirebaseConfigured }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        role,
+        clientRole,
+        businessId,
+        permissions,
+        loading,
+        isFirebaseConfigured,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
