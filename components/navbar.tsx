@@ -3,6 +3,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/app/providers"
 import { signOut } from "firebase/auth"
 import { auth } from "@/services/firebase"
@@ -16,11 +17,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { Menu, Bell, User } from "lucide-react"
 
 export function Navbar() {
   const { user, role } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const router = useRouter()
 
   const handleSignOut = async () => {
     try {
@@ -33,6 +41,14 @@ export function Navbar() {
     } catch (error) {
       console.error("Error signing out:", error)
     }
+  }
+
+  const handleProfileSettings = () => {
+    router.push("/dashboard/profile")
+  }
+
+  const handleHelpSupport = () => {
+    router.push("/dashboard/help")
   }
 
   return (
@@ -57,10 +73,18 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full text-xs"></span>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative opacity-50 cursor-not-allowed" disabled>
+                  <Bell className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>There are no new notifications at this time</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -76,11 +100,14 @@ export function Navbar() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-              <DropdownMenuItem>Account Preferences</DropdownMenuItem>
-              <DropdownMenuItem>Help & Support</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleProfileSettings} className="cursor-pointer">
+                Profile Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleHelpSupport} className="cursor-pointer">
+                Help & Support
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+              <DropdownMenuItem onClick={handleSignOut} className="text-destructive cursor-pointer">
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>

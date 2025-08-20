@@ -129,9 +129,10 @@ export function Sidebar() {
       name: "GladMenu Admin",
       href: "/dashboard/menu",
       icon: Utensils,
-      roles: ["super_admin", "admin", "client", "employee"],
+      roles: ["super_admin", "admin", "client"],
       clientRoles: ["client_admin"],
-      description: "Manage your menu, services, or inventory",
+      clientOnly: true,
+      description: "Manage your menu, products, services, or inventory",
       isNew: true,
     },
     
@@ -148,7 +149,7 @@ export function Sidebar() {
     // === UNIVERSAL SECTIONS (Everyone) ===
     {
       name: "Help & Support",
-      href: "/dashboard/support",
+      href: "/dashboard/help",
       icon: HelpCircle,
       roles: ["super_admin", "admin", "client", "employee", "moderator"],
       clientRoles: ["client_admin", "client_moderator", "client_user", "client_viewer"],
