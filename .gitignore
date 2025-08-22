@@ -72,3 +72,4 @@ node_modules/
 #
 github-commands.sh
 out/*
+scripts/bash/deploy-portalgladgradecom.sh

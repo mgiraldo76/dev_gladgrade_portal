@@ -7,6 +7,9 @@
       "hosting": {
         "dev-portal": [
           "devportalgladgradecom"
+        ],
+        "portal": [
+          "portalgladgradecom"
         ]
       }
     }
