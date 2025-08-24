@@ -28,7 +28,10 @@ import {
     Shield,
     CheckCircle,
     XCircle,
-    AlertTriangle
+    AlertTriangle,
+    Trash2, 
+    UserPlus
+    
   } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from "@/app/providers"
@@ -72,6 +75,12 @@ export default function TeamManagementPage() {
     new_password: "",
   })
 
+  // dont allow a client admin edit another admin
+  const [showAdminWarning, setShowAdminWarning] = useState(false)
+  const [pendingAdminData, setPendingAdminData] = useState<any>(null)
+
+
+
   // Load team members on component mount
   useEffect(() => {
     if (businessId) {
@@ -105,35 +114,90 @@ export default function TeamManagementPage() {
     }
   }
 
-  const handleAddUser = async () => {
+  // Check if current user can edit target user
+  const canEditUser = (targetUser: TeamMember): boolean => {
+    // Prevent editing self
+    if (targetUser.email === user?.email) {
+      return false
+    }
+    
+    // NEW: Prevent admin from editing other admins
+    if (targetUser.role === 'client_admin') {
+      return false
+    }
+    
+    return true
+  }
+
+
+  // Get tooltip message for disabled edit buttons
+  const getEditDisabledReason = (targetUser: TeamMember): string => {
+    if (targetUser.email === user?.email) {
+      return "Use the Profile page to edit your own account"
+    }
+    
+    if (targetUser.role === 'client_admin') {
+      return "Admin users can only be edited through GladGrade support tickets"
+    }
+    
+    return ""
+  }
+
+  const handleAddUser = () => {
     if (!newUser.email.trim() || !newUser.full_name.trim()) {
       alert("Email and full name are required")
       return
     }
-
+  
     if (!businessId) {
       alert("Business ID not available")
       return
     }
-
+  
     // Check user limit (20 users max)
     if (teamMembers.length >= 20) {
       alert("You have reached the maximum limit of 20 team members")
       return
     }
+  
+    // NEW: Check if creating admin user
+    if (newUser.role === 'client_admin') {
+      setPendingAdminData({ ...newUser })
+      setShowAdminWarning(true)
+      return
+    }
+  
+    // Proceed with normal user creation
+    createUser(newUser)
+  }
 
+  // Confirm admin creation after warning
+  const handleConfirmAdminCreation = () => {
+    setShowAdminWarning(false)
+    createUser(pendingAdminData)
+    setPendingAdminData(null)
+  }
+
+  // Cancel admin creation
+  const handleCancelAdminCreation = () => {
+    setShowAdminWarning(false)
+    setPendingAdminData(null)
+  }
+
+  // Actual user creation logic
+  const createUser = async (userData: typeof newUser) => {
     try {
-      console.log("👤 Creating new team member:", newUser)
+      console.log("👤 Creating new team member:", userData)
 
-      const userData = {
-        email: newUser.email.trim(),
-        full_name: newUser.full_name.trim(),
-        role: newUser.role,
-        temporary_password: newUser.temporary_password.trim() || undefined,
+      const apiData = {
+        email: userData.email.trim(),
+        full_name: userData.full_name.trim(),
+        role: userData.role,
+        temporary_password: userData.temporary_password.trim() || undefined,
         create_firebase_account: true,
       }
 
-      const response = await apiClient.createClientUser(businessId, userData)
+      const response = await apiClient.createClientUser(businessId!, apiData)
       
       if (response.success) {
         console.log("✅ Team member created successfully:", response.data)
@@ -152,8 +216,9 @@ export default function TeamManagementPage() {
         
         // Show success message
         if (response.firebase_account_created) {
+          const roleText = userData.role === 'client_admin' ? 'Admin' : 'Team Member'
           alert(
-            `✅ Team member created successfully!\n\n🔥 Firebase account created\n🔑 Temporary password: ${response.temporary_password || "Auto-generated"}\n\n📧 They can now log in with their email and password.`
+            `✅ ${roleText} created successfully!\n\n🔥 Firebase account created\n🔑 Temporary password: ${response.temporary_password || "Auto-generated"}\n\n📧 They can now log in with their email and password.`
           )
         } else {
           alert("✅ Team member created successfully!")
@@ -168,13 +233,15 @@ export default function TeamManagementPage() {
     }
   }
 
+
   const handleEditUser = (teamMember: TeamMember) => {
-    // Prevent editing self
-    if (teamMember.email === user?.email) {
-      alert("You cannot edit your own account from this page. Use the Profile page instead.")
+    // Check if user can be edited
+    if (!canEditUser(teamMember)) {
+      const reason = getEditDisabledReason(teamMember)
+      alert(reason)
       return
     }
-
+  
     setSelectedUser(teamMember)
     setEditUser({
       email: teamMember.email,
@@ -232,13 +299,19 @@ export default function TeamManagementPage() {
       alert("You cannot delete your own account.")
       return
     }
-
+  
+    // NEW: Prevent deleting other admins
+    if (teamMember.role === 'client_admin') {
+      alert("Admin users can only be deactivated through GladGrade support tickets.")
+      return
+    }
+  
     if (!confirm(`Are you sure you want to deactivate ${teamMember.full_name}?`)) {
       return
     }
-
+  
     if (!businessId) return
-
+  
     try {
       console.log("🗑️ Deactivating team member:", teamMember.id)
       
@@ -411,24 +484,57 @@ export default function TeamManagementPage() {
 
                     {/* Actions */}
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEditUser(member)}
-                        disabled={member.email === user?.email}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDeleteUser(member)}
-                        disabled={member.email === user?.email || member.status === 'inactive'}
-                        className="text-red-600 hover:text-red-700"
-                        title="Deactivate user"
-                      >
-                        <UserX className="h-3 w-3" />
-                      </Button>
+                      {/* MODIFIED: Conditional Edit Button */}
+                      {canEditUser(member) ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditUser(member)}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          title={getEditDisabledReason(member)}
+                          className="opacity-50 cursor-not-allowed"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
+                      
+                      {/* MODIFIED: Conditional Delete Button */}
+                      {member.email !== user?.email && member.role !== 'client_admin' && member.status !== 'inactive' ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteUser(member)}
+                          className="text-red-600 hover:text-red-700"
+                          title="Deactivate user"
+                        >
+                          <UserX className="h-3 w-3" />
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          title={
+                            member.email === user?.email 
+                              ? "You cannot delete your own account"
+                              : member.role === 'client_admin'
+                              ? "Admin users can only be deactivated through GladGrade support"
+                              : member.status === 'inactive'
+                              ? "User is already inactive"
+                              : "Cannot deactivate user"
+                          }
+                          className="opacity-50 cursor-not-allowed text-red-600"
+                        >
+                          <UserX className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -534,6 +640,12 @@ export default function TeamManagementPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="client_admin">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-red-500" />
+                      Admin (Full Access)
+                    </div>
+                  </SelectItem>
                   <SelectItem value="client_moderator">Moderator</SelectItem>
                   <SelectItem value="client_user">User</SelectItem>
                   <SelectItem value="client_viewer">Viewer</SelectItem>
@@ -569,6 +681,51 @@ export default function TeamManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+
+
+      {/* NEW: Admin Creation Warning Dialog */}
+      <Dialog open={showAdminWarning} onOpenChange={setShowAdminWarning}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="w-5 h-5" />
+              Admin Creation Warning
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800 leading-relaxed">
+                <strong>Creating an Admin cannot be undone by you.</strong> You must create a support ticket with GladGrade customer support to modify or remove Admin users.
+              </p>
+            </div>
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800 leading-relaxed">
+                <strong>It is highly recommended you DO NOT create users with Admin rights.</strong> Admin users have full access to all business settings, team management, and billing information.
+              </p>
+            </div>
+            <p className="text-sm text-gray-600">
+              Do you still want to create this Admin user?
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={handleCancelAdminCreation}
+              >
+                No, Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmAdminCreation}
+              >
+                Yes, Create Admin
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
 
       {/* Edit User Modal */}
       <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
@@ -608,6 +765,12 @@ export default function TeamManagementPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="client_admin">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-red-500" />
+                        Admin (Full Access)
+                      </div>
+                    </SelectItem>
                     <SelectItem value="client_moderator">Moderator</SelectItem>
                     <SelectItem value="client_user">User</SelectItem>
                     <SelectItem value="client_viewer">Viewer</SelectItem>
