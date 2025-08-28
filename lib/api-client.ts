@@ -601,8 +601,8 @@ class ApiClient {
   }
 
   // Client activities methods - ADD NEW ACTIVITY METHODS
-  async getClientActivities(clientId: number) {
-    return this.request(`/portal/clients/${clientId}/activities`)
+  async getClientActivities(clientId: number, limit: number = 10) {
+    return this.request(`/portal/clients/${clientId}/activities?limit=${limit}`)
   }
 
   async createClientActivity(clientId: number, activity: {
@@ -677,9 +677,20 @@ class ApiClient {
     })
   }
 
-
-
-
+  // reviews 
+  async getClientRecentReviews(clientId: number, params?: {
+    days?: number
+    minRating?: number
+    maxRating?: number
+  }) {
+    const queryParams = new URLSearchParams()
+    if (params?.days) queryParams.append('days', params.days.toString())
+    if (params?.minRating) queryParams.append('minRating', params.minRating.toString())
+    if (params?.maxRating) queryParams.append('maxRating', params.maxRating.toString())
+    
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : ''
+    return this.request(`/portal/clients/${clientId}/recent-reviews${query}`)
+  }
 
 
 
