@@ -2646,3 +2646,73 @@ COMMENT ON COLUMN business_claim_requests.device_type IS 'desktop, mobile, table
 COMMENT ON COLUMN business_claim_requests.session_id IS 'Unique session identifier';
 COMMENT ON COLUMN business_claim_requests.form_completion_time IS 'Time in seconds to complete form';
 COMMENT ON COLUMN prospects.business_claim_requests_id IS 'Links to original business claim request';
+
+
+
+
+
+-- Support requests table for client portal support system
+CREATE TABLE IF NOT EXISTS support_requests (
+    id SERIAL PRIMARY KEY,
+    sender_type VARCHAR(50) NOT NULL, -- 'client', 'employee', 'guest'
+    sender_id INTEGER, -- References client_portal_users.id or employees.id depending on sender_type
+    sender_email VARCHAR(255) NOT NULL,
+    sender_name VARCHAR(255) NOT NULL,
+    subject VARCHAR(500) NOT NULL,
+    message TEXT NOT NULL,
+    sender_details JSONB, -- Additional context about the sender (business_name, role, etc.)
+    
+    -- Request status and handling
+    status VARCHAR(50) DEFAULT 'open', -- 'open', 'in_progress', 'resolved', 'closed'
+    priority VARCHAR(20) DEFAULT 'medium', -- 'low', 'medium', 'high', 'urgent'
+    category VARCHAR(100), -- 'technical', 'billing', 'general', 'feature_request'
+    
+    -- Assignment and resolution
+    assigned_to INTEGER REFERENCES employees(id),
+    resolved_by INTEGER REFERENCES employees(id),
+    resolved_at TIMESTAMP,
+    resolution_notes TEXT,
+    
+    -- Communication tracking
+    response_count INTEGER DEFAULT 0,
+    last_response_at TIMESTAMP,
+    customer_satisfaction INTEGER, -- 1-5 rating after resolution
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT check_sender_type CHECK (sender_type IN ('client', 'employee', 'guest')),
+    CONSTRAINT check_status CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+    CONSTRAINT check_priority CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+    CONSTRAINT check_satisfaction CHECK (customer_satisfaction >= 1 AND customer_satisfaction <= 5)
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_support_requests_sender_type ON support_requests(sender_type);
+CREATE INDEX IF NOT EXISTS idx_support_requests_sender_id ON support_requests(sender_id);
+CREATE INDEX IF NOT EXISTS idx_support_requests_status ON support_requests(status);
+CREATE INDEX IF NOT EXISTS idx_support_requests_priority ON support_requests(priority);
+CREATE INDEX IF NOT EXISTS idx_support_requests_assigned_to ON support_requests(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_support_requests_created_at ON support_requests(created_at);
+CREATE INDEX IF NOT EXISTS idx_support_requests_updated_at ON support_requests(updated_at);
+
+-- Create updated_at trigger
+CREATE OR REPLACE FUNCTION update_support_requests_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER support_requests_updated_at
+    BEFORE UPDATE ON support_requests
+    FOR EACH ROW
+    EXECUTE FUNCTION update_support_requests_updated_at();
+
+-- Add support_requests to audit logging
+CREATE TRIGGER audit_support_requests_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON support_requests
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
