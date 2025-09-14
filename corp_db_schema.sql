@@ -2716,3 +2716,223 @@ CREATE TRIGGER support_requests_updated_at
 CREATE TRIGGER audit_support_requests_trigger
     AFTER INSERT OR UPDATE OR DELETE ON support_requests
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
+
+
+
+    -- Social Media Management System Database Schema
+
+-- 1. Social Media Platforms table
+CREATE TABLE social_media_platforms (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE, -- 'x', 'linkedin', 'youtube', 'facebook', 'instagram', 'tiktok'
+    display_name VARCHAR(100) NOT NULL, -- 'X (Twitter)', 'LinkedIn', 'YouTube', etc.
+    api_base_url VARCHAR(255),
+    is_active BOOLEAN DEFAULT TRUE,
+    requires_oauth BOOLEAN DEFAULT TRUE,
+    max_video_size_mb INTEGER, -- Platform-specific limits
+    supported_video_formats TEXT[], -- ['mp4', 'mov', 'avi']
+    max_description_length INTEGER,
+    max_title_length INTEGER,
+    supports_scheduling BOOLEAN DEFAULT FALSE,
+    icon_class VARCHAR(100), -- CSS class for platform icon
+    brand_color VARCHAR(7), -- Hex color code
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Insert default platforms
+INSERT INTO social_media_platforms (name, display_name, api_base_url, max_video_size_mb, supported_video_formats, max_description_length, max_title_length, supports_scheduling, icon_class, brand_color) VALUES
+('x', 'X (Twitter)', 'https://api.twitter.com/2', 512, ARRAY['mp4'], 280, NULL, TRUE, 'fab fa-x-twitter', '#000000'),
+('linkedin', 'LinkedIn', 'https://api.linkedin.com/v2', 200, ARRAY['mp4', 'mov'], 3000, 150, TRUE, 'fab fa-linkedin', '#0077B5'),
+('youtube', 'YouTube', 'https://www.googleapis.com/youtube/v3', 128000, ARRAY['mp4', 'mov', 'avi'], 5000, 100, TRUE, 'fab fa-youtube', '#FF0000'),
+('facebook', 'Facebook', 'https://graph.facebook.com', 4000, ARRAY['mp4', 'mov'], 2200, NULL, TRUE, 'fab fa-facebook', '#1877F2'),
+('instagram', 'Instagram', 'https://graph.facebook.com', 4000, ARRAY['mp4', 'mov'], 2200, NULL, TRUE, 'fab fa-instagram', '#E4405F'),
+('tiktok', 'TikTok', 'https://open-api.tiktok.com', 287, ARRAY['mp4'], 2200, NULL, FALSE, 'fab fa-tiktok', '#000000');
+
+-- 2. Social Media Posts table (main content)
+CREATE TABLE social_media_posts (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL, -- References your users table with firebaseUid
+    title VARCHAR(255),
+    video_url VARCHAR(500) NOT NULL, -- Firebase Storage URL
+    video_filename VARCHAR(255) NOT NULL,
+    video_size_bytes BIGINT,
+    video_duration_seconds INTEGER,
+    video_mime_type VARCHAR(100),
+    thumbnail_url VARCHAR(500), -- Auto-generated or uploaded thumbnail
+    
+    -- Content flags
+    use_same_description BOOLEAN DEFAULT TRUE, -- Checkbox to populate all platforms
+    default_description TEXT, -- Main description when use_same_description is true
+    
+    -- Post status
+    status VARCHAR(50) DEFAULT 'draft', -- 'draft', 'publishing', 'published', 'failed', 'deleted'
+    
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    published_at TIMESTAMP WITH TIME ZONE,
+    deleted_at TIMESTAMP WITH TIME ZONE -- Soft delete
+);
+
+-- 3. Platform-specific posts (tracking per platform)
+CREATE TABLE social_media_post_platforms (
+    id SERIAL PRIMARY KEY,
+    post_id INTEGER NOT NULL REFERENCES social_media_posts(id) ON DELETE CASCADE,
+    platform_id INTEGER NOT NULL REFERENCES social_media_platforms(id),
+    
+    -- Platform-specific content
+    custom_description TEXT, -- Platform-specific description override
+    hashtags TEXT, -- Platform-specific hashtags
+    mentions TEXT, -- Platform-specific mentions/tags
+    
+    -- Platform response data
+    platform_post_id VARCHAR(255), -- ID returned by the platform after posting
+    platform_url VARCHAR(500), -- Direct link to the post
+    
+    -- Status tracking
+    status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'publishing', 'published', 'failed', 'skipped'
+    error_message TEXT, -- If posting failed
+    retry_count INTEGER DEFAULT 0,
+    
+    -- Platform-specific metadata
+    platform_metadata JSONB, -- Store any additional platform-specific data
+    
+    -- Timestamps
+    published_at TIMESTAMP WITH TIME ZONE,
+    failed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 4. Social Media Account Credentials (for company accounts)
+CREATE TABLE social_media_accounts (
+    id SERIAL PRIMARY KEY,
+    platform_id INTEGER NOT NULL REFERENCES social_media_platforms(id),
+    account_name VARCHAR(255) NOT NULL, -- Display name for the account
+    account_username VARCHAR(255), -- @username or handle
+    
+    -- API Credentials (encrypted)
+    api_key VARCHAR(500), -- Encrypted API key
+    api_secret VARCHAR(500), -- Encrypted API secret
+    access_token VARCHAR(1000), -- Encrypted access token
+    refresh_token VARCHAR(1000), -- Encrypted refresh token (if applicable)
+    token_expires_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Account status
+    is_active BOOLEAN DEFAULT TRUE,
+    is_connected BOOLEAN DEFAULT FALSE, -- Successfully connected and authenticated
+    last_auth_check TIMESTAMP WITH TIME ZONE,
+    
+    -- Account metadata
+    account_metadata JSONB, -- Store platform-specific account info
+    
+    -- Management
+    created_by INTEGER NOT NULL, -- Employee ID who set up the account
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    UNIQUE(platform_id, account_username)
+);
+
+-- 5. Social Media Activity Log (for tracking all activities)
+CREATE TABLE social_media_activity_log (
+    id SERIAL PRIMARY KEY,
+    employee_id INTEGER NOT NULL, -- References users.id from main schema
+    post_id INTEGER REFERENCES social_media_posts(id),
+    account_id INTEGER REFERENCES social_media_accounts(id),
+    activity_type VARCHAR(100) NOT NULL, -- 'post_created', 'post_published', 'post_failed', 'account_connected', etc.
+    description TEXT,
+    metadata JSONB,
+    ip_address INET,
+    user_agent TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX idx_social_media_posts_employee_id ON social_media_posts(employee_id);
+CREATE INDEX idx_social_media_posts_status ON social_media_posts(status);
+CREATE INDEX idx_social_media_posts_created_at ON social_media_posts(created_at DESC);
+CREATE INDEX idx_social_media_post_platforms_post_id ON social_media_post_platforms(post_id);
+CREATE INDEX idx_social_media_post_platforms_platform_id ON social_media_post_platforms(platform_id);
+CREATE INDEX idx_social_media_post_platforms_status ON social_media_post_platforms(status);
+CREATE INDEX idx_social_media_accounts_platform_id ON social_media_accounts(platform_id);
+CREATE INDEX idx_social_media_accounts_is_active ON social_media_accounts(is_active);
+CREATE INDEX idx_social_media_activity_log_employee_id ON social_media_activity_log(employee_id);
+CREATE INDEX idx_social_media_activity_log_created_at ON social_media_activity_log(created_at DESC);
+
+-- Add Marketing role to corp database roles table (using corp schema)
+INSERT INTO roles (name, description, permissions, is_sales_role) VALUES
+    ('Marketing', 'Marketing and social media management', ARRAY['social_media_create', 'social_media_publish', 'social_media_view_all'], FALSE)
+ON CONFLICT (name) DO NOTHING;
+
+-- Update existing roles to include social media permissions where appropriate
+UPDATE roles 
+SET permissions = array_append(permissions, 'social_media_create')
+WHERE name = 'Admin' AND NOT ('social_media_create' = ANY(permissions));
+
+UPDATE roles 
+SET permissions = array_append(permissions, 'social_media_publish')
+WHERE name = 'Admin' AND NOT ('social_media_publish' = ANY(permissions));
+
+UPDATE roles 
+SET permissions = array_append(permissions, 'social_media_manage_accounts')
+WHERE name = 'Admin' AND NOT ('social_media_manage_accounts' = ANY(permissions));
+
+UPDATE roles 
+SET permissions = array_append(permissions, 'social_media_view_all')
+WHERE name = 'Admin' AND NOT ('social_media_view_all' = ANY(permissions));
+
+-- Add Marketing Manager position to company_positions
+INSERT INTO company_positions (title, description, level, additional_permissions, can_access_sales) VALUES
+    ('Marketing Manager', 'Social Media and Marketing Management', 3, ARRAY['social_media_create', 'social_media_publish', 'social_media_manage_accounts', 'social_media_view_all'], FALSE),
+    ('Social Media Specialist', 'Social Media Content Creation and Publishing', 2, ARRAY['social_media_create', 'social_media_publish'], FALSE)
+ON CONFLICT (title) DO NOTHING;
+
+-- Create a view for easy post overview (using corp database employees table)
+CREATE OR REPLACE VIEW social_media_posts_overview AS
+SELECT 
+    smp.id,
+    smp.title,
+    smp.video_filename,
+    smp.status as overall_status,
+    smp.created_at,
+    smp.published_at,
+    -- Employee info (using corp database employees table)
+    smp.employee_id,
+    e.email,
+    e.full_name,
+    e.status as employee_status,
+    -- Platform statuses
+    COALESCE(
+        json_object_agg(
+            sp.display_name, 
+            json_build_object(
+                'status', smpp.status,
+                'platform_url', smpp.platform_url,
+                'error_message', smpp.error_message
+            )
+        ) FILTER (WHERE smpp.id IS NOT NULL),
+        '{}'::json
+    ) as platform_statuses,
+    -- Count of platforms
+    COUNT(smpp.id) as total_platforms,
+    COUNT(smpp.id) FILTER (WHERE smpp.status = 'published') as published_count,
+    COUNT(smpp.id) FILTER (WHERE smpp.status = 'failed') as failed_count
+FROM social_media_posts smp
+LEFT JOIN social_media_post_platforms smpp ON smp.id = smpp.post_id
+LEFT JOIN social_media_platforms sp ON smpp.platform_id = sp.id
+LEFT JOIN employees e ON smp.employee_id = e.id  -- Join with corp database employees table
+WHERE smp.deleted_at IS NULL
+GROUP BY smp.id, smp.title, smp.video_filename, smp.status, smp.created_at, smp.published_at, smp.employee_id, e.email, e.full_name, e.status
+ORDER BY smp.created_at DESC;
+
+
+INSERT INTO social_media_accounts (platform_id, account_name, account_username, is_connected, created_by)
+VALUES 
+(1, 'X', '@gladgrade', true, 4),
+(2, 'LinkedIn', 'miguelagiraldo', true, 4),
+(3, 'Facebook', '7869436544', true, 4),
+(4, 'Instagram', 'gladgrade', true, 4),
+(5, 'Youtube', '@gladgrade', true, 4),
+(6, 'Tiktok', 'tiktok.social@tiktok.com', true, 4);

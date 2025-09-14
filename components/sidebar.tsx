@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   ImageIcon,
   Utensils,
+  Share2, 
+  HandshakeIcon
 } from "lucide-react"
 
 export function Sidebar() {
@@ -67,9 +69,18 @@ export function Sidebar() {
     {
       name: "Partners",
       href: "/dashboard/partners",
-      icon: Heart,
+      icon: HandshakeIcon,
       roles: ["super_admin", "admin"],
       requiredPermissions: ["partner_relations"],
+      employeeOnly: true,
+    },
+
+    {
+      name: "Social Media",
+      href: "/dashboard/marketing/social", 
+      icon: Share2, // You'll need to import Share2 from "lucide-react"
+      roles: ["super_admin", "admin", "employee"],
+      requiredPermissions: ["social_media_create", "social_media_publish"],
       employeeOnly: true,
     },
     {
