@@ -1106,9 +1106,263 @@ class ApiClient {
       body: JSON.stringify(serviceData),
     })
   }
+
+
+
+
+
+
   
-  // Update the existing services convenience object (find it around line 670)
-  // Replace the existing services object with this:
+
+
+// =============================================================================
+  // SOCIAL MEDIA API METHODS - ADD THESE TO YOUR EXISTING ApiClient CLASS
+  // =============================================================================
+
+  // Platform management
+  async getSocialMediaPlatforms() {
+    return this.request("/portal/social-media/platforms")
+  }
+
+  // Account management
+  async getSocialMediaAccounts() {
+    return this.request("/portal/social-media/accounts")
+  }
+
+  async connectSocialMediaAccount(accountData: {
+    platform_id: number
+    account_name: string
+    account_username?: string
+    credentials?: Record<string, string>
+  }) {
+    return this.request("/portal/social-media/accounts", {
+      method: "POST",
+      body: JSON.stringify(accountData),
+    })
+  }
+
+  async disconnectSocialMediaAccount(accountId: number) {
+    return this.request(`/portal/social-media/accounts/${accountId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Posts management
+  async getSocialMediaPosts(params?: {
+    page?: number
+    limit?: number
+    status?: string
+    employee_id?: number
+  }) {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.append('page', params.page.toString())
+    if (params?.limit) queryParams.append('limit', params.limit.toString())
+    if (params?.status) queryParams.append('status', params.status)
+    if (params?.employee_id) queryParams.append('employee_id', params.employee_id.toString())
+    
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : ''
+    return this.request(`/portal/social-media/posts${query}`)
+  }
+
+  async getSocialMediaPost(postId: number) {
+    return this.request(`/portal/social-media/posts/${postId}`)
+  }
+
+  async createSocialMediaPost(postData: {
+    title?: string
+    video_file: File
+    use_same_description: boolean
+    default_description?: string
+    platform_content: Array<{
+      platform_id: number
+      enabled: boolean
+      custom_description?: string
+      hashtags?: string
+      mentions?: string
+    }>
+  }) {
+    const formData = new FormData()
+    formData.append('video', postData.video_file)
+    if (postData.title) formData.append('title', postData.title)
+    formData.append('use_same_description', postData.use_same_description.toString())
+    if (postData.default_description) formData.append('default_description', postData.default_description)
+    formData.append('platform_content', JSON.stringify(postData.platform_content))
+
+    return this.request("/portal/social-media/posts", {
+      method: "POST",
+      body: formData,
+      headers: {} // Let browser set Content-Type for FormData
+    })
+  }
+
+  async publishSocialMediaPost(postId: number) {
+    return this.request(`/portal/social-media/posts/${postId}/publish`, {
+      method: "POST",
+    })
+  }
+
+  async deleteSocialMediaPost(postId: number) {
+    return this.request(`/portal/social-media/posts/${postId}`, {
+      method: "DELETE",
+    })
+  }
+
+  async getSocialMediaAnalytics(period?: number) {
+    const query = period ? `?period=${period}` : ''
+    return this.request(`/portal/social-media/analytics${query}`)
+  }
+  
+
+
+
+
+  // =============================================================================
+  // ENHANCED SOCIAL MEDIA API METHODS - ADD THESE NEW METHODS
+  // =============================================================================
+
+  // Test connection for a specific account - NEW METHOD
+  async testSocialMediaConnection(accountId: number) {
+    return this.request(`/portal/social-media/accounts/${accountId}/test`, {
+      method: "POST",
+    })
+  }
+
+  // Update API credentials for an account - NEW METHOD  
+  async updateSocialMediaCredentials(accountId: number, credentials: Record<string, string>) {
+    return this.request(`/portal/social-media/accounts/${accountId}/credentials`, {
+      method: "PUT",
+      body: JSON.stringify({ credentials }),
+    })
+  }
+
+  // Enhanced create post with better file support - FIXED to follow uploadMenuImage pattern exactly
+  async createSocialMediaPostEnhanced(postData: {
+    title?: string
+    media_file?: File | null // Can be image or video or null
+    use_same_description: boolean
+    default_description?: string
+    platform_content: Array<{
+      platform_id: number
+      enabled: boolean
+      custom_description?: string
+      hashtags?: string
+      mentions?: string
+    }>
+  }) {
+    try {
+      console.log("📱 Starting social media post creation...")
+      console.log("📁 Post details:", { 
+        title: postData.title, 
+        hasMedia: !!postData.media_file,
+        mediaType: postData.media_file?.type,
+        platformCount: postData.platform_content.filter(p => p.enabled).length
+      })
+
+      // Check if we're in a browser environment and have auth - EXACTLY like uploadMenuImage
+      if (typeof window === 'undefined') {
+        throw new Error('Social media posts can only be created from browser environment')
+      }
+
+      // Get Firebase auth token - EXACTLY like uploadMenuImage
+      const auth = getAuth()
+      const user = auth.currentUser
+      
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+
+      const token = await user.getIdToken()
+      console.log("🎫 Got Firebase auth token")
+
+      // Create FormData - EXACTLY like uploadMenuImage
+      const formData = new FormData()
+      
+      if (postData.title) {
+        formData.append('title', postData.title)
+      }
+      
+      if (postData.media_file) {
+        formData.append('media', postData.media_file) // Backend expects 'media' field
+        console.log("📦 FormData created with media file")
+      } else {
+        console.log("📦 FormData created for text-only post")
+      }
+      
+      formData.append('use_same_description', postData.use_same_description.toString())
+      
+      if (postData.default_description) {
+        formData.append('default_description', postData.default_description)
+      }
+      
+      formData.append('platform_content', JSON.stringify(postData.platform_content))
+
+      // FIXED: Use the same URL construction as uploadMenuImage method
+      const baseUrl = this.baseUrl || process.env.NEXT_PUBLIC_API_URL || ""
+      const url = `${baseUrl}/api/portal/social-media/posts`
+      
+      console.log("🌐 Post URL:", url)
+
+      // FIXED: Make the request EXACTLY like uploadMenuImage - direct fetch with auth
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+          // CRITICAL: Don't set Content-Type header for FormData - let browser set it
+        },
+        body: formData
+      })
+
+      console.log("📡 Post response status:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("❌ Post failed with response:", errorText)
+        throw new Error(`Post creation failed: ${response.statusText} - ${errorText}`)
+      }
+
+      const data = await response.json()
+      console.log("✅ Post successful:", data)
+
+      if (!data.success) {
+        throw new Error('Invalid response from post API')
+      }
+
+      return data
+    } catch (error) {
+      console.error("❌ Social media post error:", error)
+      throw error
+    }
+  }
+
+  // Validate file for specific platform - NEW METHOD
+  async validateSocialMediaFile(file: File, platformId: number) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('platform_id', platformId.toString())
+
+    return this.request("/portal/social-media/validate-file", {
+      method: "POST",
+      body: formData,
+      headers: {} // Let browser set Content-Type for FormData
+    })
+  }
+
+  // Get platform requirements - NEW METHOD
+  async getSocialMediaPlatformRequirements(platformId: number) {
+    return this.request(`/portal/social-media/platforms/${platformId}/requirements`)
+  }
+
+  // Refresh account connection status - NEW METHOD
+  async refreshSocialMediaAccountStatus(accountId: number) {
+    return this.request(`/portal/social-media/accounts/${accountId}/refresh`, {
+      method: "POST",
+    })
+  }
+
+
+
+
+
   services = {
     // Admin/Employee methods
     getAll: this.getAllServices.bind(this),
@@ -1124,7 +1378,34 @@ class ApiClient {
     purchase: this.purchaseClientService.bind(this)
   }
 
-
+    
+  socialMedia = {
+    // Platform methods
+    getPlatforms: this.getSocialMediaPlatforms.bind(this),
+    
+    // Account methods
+    getAccounts: this.getSocialMediaAccounts.bind(this),
+    connectAccount: this.connectSocialMediaAccount.bind(this),
+    disconnectAccount: this.disconnectSocialMediaAccount.bind(this),
+    testConnection: this.testSocialMediaConnection.bind(this), // NEW
+    updateCredentials: this.updateSocialMediaCredentials.bind(this), // NEW
+    refreshAccountStatus: this.refreshSocialMediaAccountStatus.bind(this), // NEW
+    
+    // Post methods
+    getPosts: this.getSocialMediaPosts.bind(this),
+    getPost: this.getSocialMediaPost.bind(this),
+    createPost: this.createSocialMediaPost.bind(this), // Keep existing method
+    createPostEnhanced: this.createSocialMediaPostEnhanced.bind(this), // NEW enhanced method
+    publishPost: this.publishSocialMediaPost.bind(this),
+    deletePost: this.deleteSocialMediaPost.bind(this),
+    
+    // Platform and validation methods
+    validateFile: this.validateSocialMediaFile.bind(this), // NEW
+    getPlatformRequirements: this.getSocialMediaPlatformRequirements.bind(this), // NEW
+    
+    // Analytics
+    getAnalytics: this.getSocialMediaAnalytics.bind(this)
+  }
 
 
 }
