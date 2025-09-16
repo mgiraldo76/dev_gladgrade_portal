@@ -1,1 +1,1 @@
-select * from businesses;
+select * from users order by id  asc limit 500;
