@@ -1360,6 +1360,102 @@ class ApiClient {
   }
 
 
+  // ===== MOBILE APP ADMIN API METHODS =====
+
+  // Get mobile app dashboard overview
+  async getMobileAdminOverview() {
+    return this.request("/portal/mobile-admin/dashboard-overview")
+  }
+
+  // Get user analytics with date range
+  async getMobileUserAnalytics(days: number = 30) {
+    const params = new URLSearchParams({ days: days.toString() })
+    return this.request(`/portal/mobile-admin/user-analytics?${params.toString()}`)
+  }
+
+  // Get device and platform analytics
+  async getMobileDeviceAnalytics(days: number = 30) {
+    const params = new URLSearchParams({ days: days.toString() })
+    return this.request(`/portal/mobile-admin/device-analytics?${params.toString()}`)
+  }
+
+  // Get error analytics and monitoring
+  async getMobileErrorAnalytics(days: number = 7) {
+    const params = new URLSearchParams({ days: days.toString() })
+    return this.request(`/portal/mobile-admin/error-analytics?${params.toString()}`)
+  }
+
+  // Get detailed user information with pagination and filters
+  async getMobileUserDetails(options: {
+    page?: number
+    limit?: number
+    sortBy?: string
+    sortOrder?: 'ASC' | 'DESC'
+    dateFrom?: string
+    dateTo?: string
+    platform?: string
+    search?: string
+  } = {}) {
+    const params = new URLSearchParams()
+    
+    if (options.page) params.append('page', options.page.toString())
+    if (options.limit) params.append('limit', options.limit.toString())
+    if (options.sortBy) params.append('sortBy', options.sortBy)
+    if (options.sortOrder) params.append('sortOrder', options.sortOrder)
+    if (options.dateFrom) params.append('dateFrom', options.dateFrom)
+    if (options.dateTo) params.append('dateTo', options.dateTo)
+    if (options.platform) params.append('platform', options.platform)
+    if (options.search) params.append('search', options.search)
+    
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.request(`/portal/mobile-admin/user-details${query}`)
+  }
+
+  // Export mobile analytics data
+  async exportMobileAnalyticsData(options: {
+    type?: 'users' | 'errors' | 'activities' | 'all'
+    format?: 'json' | 'csv'
+    days?: number
+  } = {}) {
+    const params = new URLSearchParams()
+    
+    if (options.type) params.append('type', options.type)
+    if (options.format) params.append('format', options.format)
+    if (options.days) params.append('days', options.days.toString())
+    
+    const query = params.toString() ? `?${params.toString()}` : ''
+    
+    // For downloads, we need to handle differently
+    if (options.format === 'csv') {
+      // Return the URL for download
+      const baseUrl = this.baseUrl || process.env.NEXT_PUBLIC_API_URL || ""
+      const auth = getAuth()
+      const user = auth.currentUser
+      let authHeaders = {}
+
+      //const token = await user.getIdToken()
+      if (user) {
+        try {
+          const token = await user.getIdToken()
+          return {
+            downloadUrl: `${baseUrl}/api/portal/mobile-admin/export-data${query}`,
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        } catch (error) {
+          console.error("❌ Error getting auth token:", error)
+        }
+      } else {
+        console.log("⚠️ No authenticated user found")
+      }
+
+      
+    } else {
+      return this.request(`/portal/mobile-admin/export-data${query}`)
+    }
+  }
+
 
 
 
@@ -1407,7 +1503,14 @@ class ApiClient {
     getAnalytics: this.getSocialMediaAnalytics.bind(this)
   }
 
-
+  mobileAdmin = {
+    getOverview: this.getMobileAdminOverview.bind(this),
+    getUserAnalytics: this.getMobileUserAnalytics.bind(this),
+    getDeviceAnalytics: this.getMobileDeviceAnalytics.bind(this),
+    getErrorAnalytics: this.getMobileErrorAnalytics.bind(this),
+    getUserDetails: this.getMobileUserDetails.bind(this),
+    exportData: this.exportMobileAnalyticsData.bind(this)
+  }
 }
 
 

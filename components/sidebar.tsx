@@ -50,6 +50,15 @@ export function Sidebar() {
     },
     
     // === GLADGRADE EMPLOYEE ONLY SECTIONS ===
+
+    {
+      name: "Mobile App Admin",
+      href: "/dashboard/admin/mobile_app",
+      icon: HandshakeIcon,
+      roles: ["super_admin", "admin"],
+      requiredPermissions: ["advanced_reports"],
+      employeeOnly: true,
+    },
     {
       name: "Sales",
       href: "/dashboard/sales",
